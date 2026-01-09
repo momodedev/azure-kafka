@@ -23,7 +23,8 @@ ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa <<< y
 
 token=`curl 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | cut -d '"' -f 4`
 mysecret=`curl 'https://control-keyvault.vault.azure.net/secrets/github-token?api-version=7.4' -H "Authorization: Bearer $token" | cut -d '"' -f 4`
-git clone https://Neifar:$mysecret@github.com/Neifar/azure-kafka-deployment.git
+#git clone https://Neifar:$mysecret@github.com/Neifar/azure-kafka-deployment.git
+git clone https://momodedev:$mysecret@github.com/momodedev/azure-kafka.git
 
 echo "Initialization done"
 
