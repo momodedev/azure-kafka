@@ -25,4 +25,10 @@ variable "tf_cmd_type" {
   type        = string
 }
 
+variable "kafka_instance_count" {
+  description = "Number of Kafka broker instances to provision in the VMSS."
+  type        = number
+  default     = 3
+}
+
 
