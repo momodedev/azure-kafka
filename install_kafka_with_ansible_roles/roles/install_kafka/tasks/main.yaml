@@ -12,6 +12,17 @@
   register: kafka_meta_properties
   run_once: true
 
+- name: Assign deterministic node id
+  set_fact:
+    kafka_node_id: "{{ groups['kafka'].index(inventory_hostname) + 1 }}"
+  run_once: true
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Derive advertised host for Kafka
+  set_fact:
+    kafka_advertised_host: "{{ hostvars[inventory_hostname].private_ip | default(ansible_host) | default(ansible_default_ipv4.address) }}"
+
 - name: Configure Kafka KRaft server properties
   template:
     src: server.properties.j2

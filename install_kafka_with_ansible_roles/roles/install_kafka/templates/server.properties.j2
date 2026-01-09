@@ -8,7 +8,7 @@ controller.listener.names=CONTROLLER
 ############################# Listener Configuration #############################
 
 listeners=CONTROLLER://0.0.0.0:{{ kafka_controller_port }},INTERNAL://0.0.0.0:{{ kafka_client_port }},EXTERNAL://0.0.0.0:{{ kafka_external_port }}
-advertised.listeners=INTERNAL://{{ hostvars[inventory_hostname]['private_ip'] | default(ansible_host) | default(ansible_default_ipv4.address) }}:{{ kafka_client_port }},EXTERNAL://{{ hostvars[inventory_hostname]['private_ip'] | default(ansible_host) | default(ansible_default_ipv4.address) }}:{{ kafka_external_port }}
+advertised.listeners=INTERNAL://{{ kafka_advertised_host }}:{{ kafka_client_port }},EXTERNAL://{{ kafka_advertised_host }}:{{ kafka_external_port }}
 listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
 inter.broker.listener.name=INTERNAL
 
