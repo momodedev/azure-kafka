@@ -114,7 +114,7 @@ resource "azurerm_linux_virtual_machine" "example" {
   # provisioner "remote-exec" {
   #   when    = destroy
   #   inline = [
-  #     "cd azure-kafka-deployment/kafka_setup_terraform_private_vmss",
+  #     "cd azure-kafka/kafka_setup_terraform_private_vmss",
   #     "terraform destroy -var-file='sub_id.tfvars' -auto-approve",
   #   ]
   # }
