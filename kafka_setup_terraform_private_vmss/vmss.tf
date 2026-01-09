@@ -82,6 +82,6 @@ resource "null_resource" "launch_ansible_playbook" {
 
   provisioner "local-exec" {
     working_dir = "../install_kafka_with_ansible_roles"
-    command      = "mkdir -p generated && ./inventory_script_hosts.sh ${azurerm_resource_group.example.name} ${azurerm_linux_virtual_machine_scale_set.brokers.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml"
+    command      = "az login --identity >/dev/null && mkdir -p generated && ./inventory_script_hosts.sh ${azurerm_resource_group.example.name} ${azurerm_linux_virtual_machine_scale_set.brokers.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml"
   }
 }
