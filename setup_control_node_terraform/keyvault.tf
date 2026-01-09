@@ -19,6 +19,7 @@ resource "azurerm_key_vault" "example" {
     ip_rules = [
       "${chomp(data.http.myip.response_body)}",
       "167.220.255.70",
+      "167.220.233.6",
     ]
     virtual_network_subnet_ids = [azurerm_subnet.control.id]
   }
