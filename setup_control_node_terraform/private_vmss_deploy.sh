@@ -2,8 +2,18 @@
 
 
 source ansible-venv/bin/activate
-cd azure-kafka-deployment/kafka_setup_terraform_private_vmss
-git pull
+
+REPO_DIR="azure-kafka-deployment"
+
+if [ ! -d "$REPO_DIR/.git" ]; then
+	echo "Repository not found; please rerun private_vmss_init.sh to clone it" >&2
+	exit 1
+fi
+
+echo "Fetching latest code from origin..."
+git -C "$REPO_DIR" fetch origin --prune && git -C "$REPO_DIR" reset --hard origin/main
+
+cd "$REPO_DIR/kafka_setup_terraform_private_vmss"
 echo "ARM_SUBSCRIPTION_ID=\"$1\"" > sub_id.tfvars
 echo "kafka_instance_count=${3:-3}" >> sub_id.tfvars
 terraform init
