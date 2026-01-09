@@ -25,7 +25,7 @@ token=`curl 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2
 mysecret=`curl 'https://control-keyvault.vault.azure.net/secrets/github-token?api-version=7.4' -H "Authorization: Bearer $token" | cut -d '"' -f 4`
 
 REPO_URL="https://momodedev:$mysecret@github.com/momodedev/azure-kafka.git"
-REPO_DIR="azure-kafka-deployment"
+REPO_DIR="azure-kafka"
 
 if [ -d "$REPO_DIR/.git" ]; then
 	echo "Repository already present, fetching latest from origin..."
