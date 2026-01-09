@@ -1,0 +1,122 @@
+- name: Ensure Kafka configuration directory ownership
+  file:
+    path: "{{ kafka_workspace }}/config"
+    state: directory
+    owner: kafka
+    group: kafka
+    mode: "0755"
+
+- name: Check for existing Kafka metadata
+  stat:
+    path: "{{ kafka_data_dir }}/meta.properties"
+  register: kafka_meta_properties
+  run_once: true
+
+- name: Configure Kafka KRaft server properties
+  template:
+    src: server.properties.j2
+    dest: "{{ kafka_workspace }}/config/server.properties"
+    owner: kafka
+    group: kafka
+    mode: "0644"
+
+- name: Read existing cluster id when present
+  slurp:
+    src: "{{ kafka_data_dir }}/meta.properties"
+  when: kafka_meta_properties.stat.exists
+  register: kafka_meta_contents
+  run_once: true
+
+- name: Extract existing cluster id
+  when: kafka_meta_properties.stat.exists
+  set_fact:
+    kafka_cluster_id: "{{ (kafka_meta_contents.content | b64decode).split('\n') | select('match', '^cluster.id=') | list | first | regex_replace('^cluster.id=', '') }}"
+  run_once: true
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Generate Kafka cluster UUID
+  when: not kafka_meta_properties.stat.exists
+  become_user: kafka
+  command: "{{ kafka_workspace }}/bin/kafka-storage.sh random-uuid"
+  register: kafka_cluster_uuid
+  run_once: true
+
+- name: Share generated cluster UUID
+  when: not kafka_meta_properties.stat.exists
+  set_fact:
+    kafka_cluster_id: "{{ kafka_cluster_uuid.stdout | trim }}"
+  run_once: true
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Format Kafka storage directories
+  become_user: kafka
+  command: "{{ kafka_workspace }}/bin/kafka-storage.sh format --config {{ kafka_workspace }}/config/server.properties --cluster-id {{ hostvars['localhost']['kafka_cluster_id'] }} --ignore-formatted"
+
+- name: Create Kafka systemd unit
+  template:
+    src: kafka.service.j2
+    dest: /etc/systemd/system/kafka.service
+    mode: "0644"
+
+- name: Reload systemd and start Kafka broker
+  systemd:
+    name: kafka
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Kafka client listener
+  wait_for:
+    host: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+    port: "{{ kafka_client_port }}"
+    delay: 5
+    timeout: 60
+    state: started
+    msg: "Kafka client listener not available on {{ inventory_hostname }}"
+
+- name: Wait for Kafka controller listener
+  wait_for:
+    host: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+    port: "{{ kafka_controller_port }}"
+    delay: 5
+    timeout: 60
+    state: started
+    msg: "Kafka controller listener not available on {{ inventory_hostname }}"
+
+- name: Unpack Kafka exporter
+  unarchive:
+    src: "{{ kafka_exporter_download_url }}"
+    dest: /opt
+    remote_src: true
+    creates: "/opt/kafka_exporter-{{ kafka_exporter_version }}.linux-amd64"
+
+- name: Symlink Kafka exporter directory
+  file:
+    src: "/opt/kafka_exporter-{{ kafka_exporter_version }}.linux-amd64"
+    dest: /opt/kafka-exporter
+    state: link
+    force: true
+
+- name: Create Kafka exporter systemd unit
+  template:
+    src: kafka_exporter.service.j2
+    dest: /etc/systemd/system/kafka_exporter.service
+    mode: "0644"
+
+- name: Reload systemd and start Kafka exporter
+  systemd:
+    name: kafka_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Wait for Kafka exporter endpoint
+  wait_for:
+    host: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+    port: "{{ kafka_exporter_port }}"
+    delay: 5
+    timeout: 30
+    state: started
+    msg: "Kafka exporter not reachable on {{ inventory_hostname }}"

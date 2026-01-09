@@ -1,0 +1,10 @@
+[kafka]
+vm0.kafkazookeeperdnsprefix.eastus.cloudapp.azure.com private_ip=172.16.1.4
+vm1.kafkazookeeperdnsprefix.eastus.cloudapp.azure.com private_ip=172.16.1.5
+[zookeeper]
+vm0.kafkazookeeperdnsprefix.eastus.cloudapp.azure.com private_ip=172.16.1.4
+vm1.kafkazookeeperdnsprefix.eastus.cloudapp.azure.com private_ip=172.16.1.5
+[all:vars]
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_user=azureuser
+ansible_python_interpreter=/usr/bin/python3

@@ -1,0 +1,10 @@
+dataDir={{zookeeper_data_dir}}
+dataLogDir={{zookeeper_log_dir}}
+clientPort={{zookeeper_port}}
+maxClientCnxns=0
+admin.enableServer=false
+initLimit=10
+syncLimit=5
+{% for zookeeper_server in groups['zookeeper'] %}
+server.{{ loop.index }}={{ hostvars[zookeeper_server]['ansible_facts']['eth0']['ipv4']['address'] }}:2888:3888
+{% endfor %}

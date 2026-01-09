@@ -1,0 +1,48 @@
+############################# KRaft Node Basics #############################
+
+process.roles=broker,controller
+node.id={{ kafka_node_id }}
+controller.listener.names=CONTROLLER
+
+
+############################# Listener Configuration #############################
+
+listeners=CONTROLLER://0.0.0.0:{{ kafka_controller_port }},INTERNAL://0.0.0.0:{{ kafka_client_port }},EXTERNAL://0.0.0.0:{{ kafka_external_port }}
+advertised.listeners=INTERNAL://{{ private_ip | default(ansible_default_ipv4.address) }}:{{ kafka_client_port }},EXTERNAL://{{ private_ip | default(ansible_default_ipv4.address) }}:{{ kafka_external_port }}
+listener.security.protocol.map=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+inter.broker.listener.name=INTERNAL
+
+controller.quorum.voters={% for host in groups['kafka'] | sort %}{{ groups['kafka'].index(host) + 1 }}@{{ hostvars[host]['private_ip'] | default(hostvars[host]['ansible_default_ipv4']['address']) }}:{{ kafka_controller_port }}{% if not loop.last %},{% endif %}{% endfor %}
+
+
+############################# General Broker Settings #############################
+
+num.network.threads=8
+num.io.threads=8
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+log.dirs={{ kafka_log_dir }}
+num.partitions=2
+num.recovery.threads.per.data.dir=4
+auto.create.topics.enable=false
+
+
+############################# Replication Settings #############################
+
+default.replication.factor={{ [groups['kafka'] | length, 3] | min }}
+offsets.topic.replication.factor={{ [groups['kafka'] | length, 3] | min }}
+transaction.state.log.replication.factor={{ [groups['kafka'] | length, 3] | min }}
+transaction.state.log.min.isr={{ [([groups['kafka'] | length, 3] | min) - 1, 1] | max }}
+min.insync.replicas={{ [([groups['kafka'] | length, 3] | min) - 1, 1] | max }}
+
+
+############################# Log Retention #############################
+
+log.retention.hours=168
+log.retention.check.interval.ms=300000
+
+
+############################# Group Coordinator #############################
+
+group.initial.rebalance.delay.ms=0

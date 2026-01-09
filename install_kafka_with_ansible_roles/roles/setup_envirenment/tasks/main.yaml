@@ -1,0 +1,61 @@
+- name: Install required packages
+  package:
+    name:
+      - java-17-openjdk
+      - net-tools
+      - tar
+    state: present
+
+- name: create kafka group
+  group:
+    name: kafka
+    state: present
+
+- name: create kafka user
+  user:
+    name: kafka
+    group: kafka
+
+- name: check kafka directory
+  stat:
+    path: "{{kafka_workspace}}"
+  register: directory_check
+
+- name: Download and unpack kafka
+  unarchive:
+    src: "{{kafka_url}}"
+    dest: "{{kafka_home}}"
+    owner: kafka
+    group: kafka
+    creates: "{{kafka_workspace}}"
+    mode: 0755
+    remote_src: yes
+  
+- name: find kafka folder
+  find: 
+    paths: "{{kafka_home}}"
+    pattern: "kafka_*"
+    file_type: directory
+  register: directory_name
+
+- name: rename kafka folder
+  shell: mv {{directory_name.files[0].path}} {{kafka_workspace}}
+  when: not directory_check.stat.exists
+  args:
+    creates: "{{ kafka_workspace }}"
+
+- name: Ensure Kafka data directory exists
+  file:
+    path: "{{ kafka_data_dir }}"
+    state: directory
+    owner: kafka
+    group: kafka
+    mode: "0755"
+
+- name: Ensure Kafka services log directory exists
+  file:
+    path: "{{ services_logs_dir }}"
+    state: directory
+    owner: kafka
+    group: kafka
+    mode: "0755"

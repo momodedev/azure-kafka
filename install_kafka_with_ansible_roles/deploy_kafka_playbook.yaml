@@ -1,0 +1,54 @@
+---
+- name: Wait for SSH
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ensure VM is reachable over SSH
+      wait_for:
+        port: 22
+        host: "{{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}"
+        search_regex: OpenSSH
+        delay: 10
+        timeout: 120
+      vars:
+        ansible_connection: local
+
+- name: Prepare broker environment
+  hosts: kafka
+  become: true
+  vars_files:
+    - vars
+  roles:
+    - setup_envirenment
+
+- name: Configure KRaft Kafka brokers
+  hosts: kafka
+  become: true
+  vars_files:
+    - vars
+  pre_tasks:
+    - name: Assign deterministic node id
+      set_fact:
+        kafka_node_id: "{{ groups['kafka'].index(inventory_hostname) + 1 }}"
+  roles:
+    - install_kafka
+
+- name: Generate Prometheus targets for Kafka exporters
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars
+  tasks:
+    - name: Ensure Prometheus target directory exists
+      file:
+        path: "{{ prometheus_sd_output_path | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render Kafka scrape target file
+      template:
+        src: templates/prometheus_kafka_targets.json.j2
+        dest: "{{ prometheus_sd_output_path }}"
+        mode: "0644"
+
