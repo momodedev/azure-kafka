@@ -19,9 +19,12 @@
   delegate_to: localhost
   delegate_facts: true
 
+
 - name: Derive advertised host for Kafka
   set_fact:
-    kafka_advertised_host: "{{ ansible_host | default(hostvars[inventory_hostname].private_ip) | default(ansible_default_ipv4.address) }}"
+    advertised_host: "{{ ansible_default_ipv4.address }}"
+  failed_when: 
+    - advertised_host is not defined or advertised_host == "" or advertised_host == "0.0.0.0"
 
 - name: Configure Kafka KRaft server properties
   template:
