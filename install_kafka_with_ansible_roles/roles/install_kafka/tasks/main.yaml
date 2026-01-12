@@ -21,9 +21,22 @@
 
 - name: Derive advertised host for Kafka
   set_fact:
-    advertised_host: "{{ ansible_default_ipv4.address }}"
-  failed_when: 
-    - advertised_host is not defined or advertised_host == "" or advertised_host == "0.0.0.0"
+    kafka_advertised_host: "{{ ansible_host | default(hostvars[inventory_hostname].private_ip) | default(ansible_default_ipv4.address) }}"
+
+- name: DEBUG - Show kafka_advertised_host
+  debug:
+    msg: "kafka_advertised_host is set to: {{ kafka_advertised_host | default('UNDEFINED') }}"
+
+- name: DEBUG - Show advertised_host
+  debug:
+    msg: "advertised_host is set to: {{ advertised_host | default('UNDEFINED') }}"
+
+- name: DEBUG - Show all network facts
+  debug:
+    msg:
+      - "ansible_host: {{ ansible_host | default('UNDEFINED') }}"
+      - "ansible_default_ipv4.address: {{ ansible_default_ipv4.address | default('UNDEFINED') }}"
+      - "hostvars private_ip: {{ hostvars[inventory_hostname].private_ip | default('UNDEFINED') }}"
 
 - name: Configure Kafka KRaft server properties
   template:
