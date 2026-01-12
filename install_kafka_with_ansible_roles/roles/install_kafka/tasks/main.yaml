@@ -24,6 +24,10 @@
   set_fact:
     kafka_advertised_host: "{{ ansible_host | default(hostvars[inventory_hostname].private_ip) | default(ansible_default_ipv4.address) }}"
 
+- name: Derive external advertised host for Kafka
+  set_fact:
+    kafka_external_advertised_host: "{{ kafka_external_advertised_host | default(kafka_advertised_host) }}"
+
 - name: Validate kafka_advertised_host
   assert:
     that:
@@ -39,9 +43,26 @@
       ansible_default_ipv4.address: {{ ansible_default_ipv4.address | default('UNDEFINED') }}
     success_msg: "kafka_advertised_host validated: {{ kafka_advertised_host }}"
 
+- name: Validate kafka_external_advertised_host
+  assert:
+    that:
+      - kafka_external_advertised_host is defined
+      - kafka_external_advertised_host != ''
+      - kafka_external_advertised_host != '0.0.0.0'
+      - kafka_external_advertised_host != '127.0.0.1'
+      - kafka_external_advertised_host is match('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+    fail_msg: |
+      FATAL: kafka_external_advertised_host is invalid: {{ kafka_external_advertised_host | default('UNDEFINED') }}
+      kafka_advertised_host: {{ kafka_advertised_host | default('UNDEFINED') }}
+    success_msg: "kafka_external_advertised_host validated: {{ kafka_external_advertised_host }}"
+
 - name: DEBUG - Show final kafka_advertised_host
   debug:
     msg: "Broker {{ inventory_hostname }} will advertise on {{ kafka_advertised_host }}"
+
+- name: DEBUG - Show final kafka_external_advertised_host
+  debug:
+    msg: "Broker {{ inventory_hostname }} will externally advertise on {{ kafka_external_advertised_host }}"
 
 - name: DEBUG - Show all kafka_ variables
   debug:
