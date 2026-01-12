@@ -13,8 +13,8 @@ ExecStart=/opt/kafka-exporter/kafka_exporter \
   --web.listen-address=0.0.0.0:{{ kafka_exporter_port }}
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:{{ services_logs_dir }}/kafka-exporter.log
-StandardError=append:{{ services_logs_dir }}/kafka-exporter-error.log
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
