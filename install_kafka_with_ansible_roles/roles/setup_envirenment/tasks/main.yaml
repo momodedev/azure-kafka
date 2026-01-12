@@ -16,12 +16,16 @@
     name: kafka
     group: kafka
 
+- name: Collect service facts
+  service_facts:
+
 # Disable firewalld (ports 9092/9093/9094/9308/9100 need to be reachable)
-- name: Disable firewalld
+- name: Disable firewalld when present
   service:
     name: firewalld
     state: stopped
     enabled: no
+  when: "'firewalld.service' in ansible_facts.services"
   become: yes
 
 - name: check kafka directory
