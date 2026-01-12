@@ -50,7 +50,7 @@
     state: directory
     owner: kafka
     group: kafka
-    mode: "0755"
+    mode: "0750"
 
 - name: Ensure Kafka services log directory exists
   file:

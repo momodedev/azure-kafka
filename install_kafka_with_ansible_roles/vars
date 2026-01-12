@@ -2,6 +2,7 @@ kafka_home: /opt
 kafka_workspace: "{{ kafka_home }}/kafka"
 kafka_data_dir: "{{ kafka_workspace }}/data"
 kafka_log_dir: "{{ kafka_data_dir }}"
+kafka_log_dirs: "{{ kafka_data_dir }}"
 services_logs_dir: "{{ kafka_workspace }}/services-logs"
 kafka_heap_size: -Xmx2G -Xms2G
 kafka_client_port: 9092
