@@ -21,7 +21,7 @@
 
 - name: Derive advertised host for Kafka
   set_fact:
-    kafka_advertised_host: "{{ hostvars[inventory_hostname].private_ip | default(ansible_host) | default(ansible_default_ipv4.address) }}"
+    kafka_advertised_host: "{{ ansible_host | default(hostvars[inventory_hostname].private_ip) | default(ansible_default_ipv4.address) }}"
 
 - name: Configure Kafka KRaft server properties
   template:

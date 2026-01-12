@@ -6,21 +6,21 @@ resource "azurerm_resource_group" "example" {
 }
 
 resource "azurerm_virtual_network" "kafka" {
-  name                = "kafka-vnet"
+  name                = "kafka-prod-vnet"
   resource_group_name = azurerm_resource_group.example.name
   location            = azurerm_resource_group.example.location
   address_space = ["172.16.0.0/16"]
 }
 
 resource "azurerm_subnet" "kafka" {
-  name                 = "kafka-subnet"
+  name                 = "kafka-prod-subnet"
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.kafka.name
   address_prefixes     = ["172.16.1.0/24"]
 }
 
 resource "azurerm_network_security_group" "example" {
-  name                = "kafka-nsg"
+  name                = "kafka-prod-nsg"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
 

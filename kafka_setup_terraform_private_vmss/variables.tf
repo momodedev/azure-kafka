@@ -6,8 +6,8 @@ variable "resource_group_location" {
 
 variable "resource_group_name" {
   type        = string
-  default     = "mall-kafka"
-  description = "Name of the resource group hosting the Kafka infrastructure resources."
+  default     = "mall"
+  description = "Name of the resource group hosting the Kafka infrastructure resources (must be 'mall')."
 }
 
 variable "ARM_SUBSCRIPTION_ID" {
@@ -17,8 +17,8 @@ variable "ARM_SUBSCRIPTION_ID" {
 
 variable "kafka_vmss_name" {
   type        = string
-  default     = "kafka-brokers"
-  description = "Name assigned to the Kafka broker virtual machine scale set."
+  default     = "kafka-prod-brokers"
+  description = "Name assigned to the Kafka broker virtual machine scale set (kafka-prod-* prefix)."
 }
 
 variable "kafka_admin_username" {

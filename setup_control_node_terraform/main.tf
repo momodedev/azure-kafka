@@ -19,7 +19,8 @@ resource "azurerm_subnet" "control" {
   resource_group_name  = azurerm_resource_group.example.name
   virtual_network_name = azurerm_virtual_network.control.name
   address_prefixes     = ["172.17.1.0/24"]
-  service_endpoints = ["Microsoft.KeyVault"]
+  service_endpoints    = ["Microsoft.KeyVault"]
+  default_outbound_access_enabled = false
 }
 
 resource "azurerm_network_security_group" "example" {

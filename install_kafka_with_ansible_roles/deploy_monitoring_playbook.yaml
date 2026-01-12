@@ -1,0 +1,9 @@
+---
+- name: Deploy Prometheus and Grafana to monitoring host
+  hosts: all
+  become: true
+  vars:
+    broker_ips: "{{ (broker_ips | default('')) | split(',') | reject('equalto', '') | list }}"
+    prometheus_version: "2.52.0"
+  roles:
+    - monitoring

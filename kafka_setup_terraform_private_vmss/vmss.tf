@@ -8,7 +8,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   sku                 = var.kafka_vm_size
   instances           = var.kafka_instance_count
   upgrade_mode        = "Manual"
-  computer_name_prefix = "kafka"
+  computer_name_prefix = "kafka-prod"
   overprovision       = false
   single_placement_group = true
 
@@ -46,12 +46,12 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   }
 
   network_interface {
-    name                      = "kafka-nic"
+    name                      = "kafka-prod-nic"
     primary                   = true
     network_security_group_id = azurerm_network_security_group.example.id
 
     ip_configuration {
-      name      = "kafka-ip-config"
+      name      = "kafka-prod-ip-config"
       primary   = true
       subnet_id = azurerm_subnet.kafka.id
     }
