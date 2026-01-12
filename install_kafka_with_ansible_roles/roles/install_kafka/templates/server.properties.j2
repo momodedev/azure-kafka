@@ -8,7 +8,7 @@ controller.listener.names=CONTROLLER
 ############################# Listener Configuration #############################
 
 listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-advertised.listeners=PLAINTEXT://{{ kafka_advertised_host }}:9092
+advertised.listeners=PLAINTEXT://{{ advertised_host }}:9092
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 controller.listener.names=CONTROLLER
 inter.broker.listener.name=PLAINTEXT
