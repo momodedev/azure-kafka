@@ -19,24 +19,56 @@
   delegate_to: localhost
   delegate_facts: true
 
+
 - name: Derive advertised host for Kafka
   set_fact:
     kafka_advertised_host: "{{ ansible_host | default(hostvars[inventory_hostname].private_ip) | default(ansible_default_ipv4.address) }}"
 
-- name: DEBUG - Show kafka_advertised_host
-  debug:
-    msg: "kafka_advertised_host is set to: {{ kafka_advertised_host | default('UNDEFINED') }}"
+- name: Validate kafka_advertised_host
+  assert:
+    that:
+      - kafka_advertised_host is defined
+      - kafka_advertised_host != ''
+      - kafka_advertised_host != '0.0.0.0'
+      - kafka_advertised_host != '127.0.0.1'
+      - kafka_advertised_host is match('^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+    fail_msg: |
+      FATAL: kafka_advertised_host is invalid: {{ kafka_advertised_host | default('UNDEFINED') }}
+      ansible_host: {{ ansible_host | default('UNDEFINED') }}
+      private_ip: {{ hostvars[inventory_hostname].private_ip | default('UNDEFINED') }}
+      ansible_default_ipv4.address: {{ ansible_default_ipv4.address | default('UNDEFINED') }}
+    success_msg: "kafka_advertised_host validated: {{ kafka_advertised_host }}"
 
-- name: DEBUG - Show advertised_host
+- name: DEBUG - Show final kafka_advertised_host
   debug:
-    msg: "advertised_host is set to: {{ advertised_host | default('UNDEFINED') }}"
+    msg: "Broker {{ inventory_hostname }} will advertise on {{ kafka_advertised_host }}"
 
-- name: DEBUG - Show all network facts
+- name: Configure Kafka KRaft server properties
+  template:
+    src: server.properties.j2
+    dest: "{{ kafka_workspace }}/config/server.properties"
+    owner: kafka
+    group: kafka
+    mode: "0644"
+  become: yes
+
+- name: Verify advertised.listeners in rendered config
+  shell: grep "^advertised.listeners=" {{ kafka_workspace }}/config/server.properties
+  register: advertised_check
+  changed_when: false
+  become: yes
+
+- name: DEBUG - Show rendered advertised.listeners
   debug:
-    msg:
-      - "ansible_host: {{ ansible_host | default('UNDEFINED') }}"
-      - "ansible_default_ipv4.address: {{ ansible_default_ipv4.address | default('UNDEFINED') }}"
-      - "hostvars private_ip: {{ hostvars[inventory_hostname].private_ip | default('UNDEFINED') }}"
+    var: advertised_check.stdout
+
+- name: Fail if advertised.listeners contains 0.0.0.0 or is empty
+  fail:
+    msg: "ERROR: advertised.listeners is misconfigured: {{ advertised_check.stdout }}"
+  when: >
+    '0.0.0.0' in advertised_check.stdout or
+    advertised_check.stdout is search('://:[0-9]+') or
+    advertised_check.stdout == ''
 
 - name: Configure Kafka KRaft server properties
   template:
