@@ -43,6 +43,16 @@
   debug:
     msg: "Broker {{ inventory_hostname }} will advertise on {{ kafka_advertised_host }}"
 
+- name: DEBUG - Show all kafka_ variables
+  debug:
+    msg:
+      - "kafka_process_roles: {{ kafka_process_roles | default('UNDEFINED') }}"
+      - "kafka_node_id: {{ kafka_node_id | default('UNDEFINED') }}"
+      - "kafka_controller_port: {{ kafka_controller_port | default('UNDEFINED') }}"
+      - "kafka_client_port: {{ kafka_client_port | default('UNDEFINED') }}"
+      - "kafka_advertised_host: {{ kafka_advertised_host | default('UNDEFINED') }}"
+      - "kafka_log_dirs: {{ kafka_log_dirs | default('UNDEFINED') }}"
+
 - name: Configure Kafka KRaft server properties
   template:
     src: server.properties.j2
@@ -69,14 +79,6 @@
     '0.0.0.0' in advertised_check.stdout or
     advertised_check.stdout is search('://:[0-9]+') or
     advertised_check.stdout == ''
-
-- name: Configure Kafka KRaft server properties
-  template:
-    src: server.properties.j2
-    dest: "{{ kafka_workspace }}/config/server.properties"
-    owner: kafka
-    group: kafka
-    mode: "0644"
 
 - name: Read existing cluster id when present
   slurp:
@@ -178,40 +180,3 @@
     timeout: 30
     state: started
     msg: "Kafka exporter not reachable on {{ inventory_hostname }}"
-
-
----
-# Kafka Installation Defaults
-
-# KRaft Configuration
-kafka_process_roles: "broker,controller"
-kafka_node_id: 1  # Will be overridden by playbook
-kafka_controller_port: 9093
-kafka_client_port: 9092
-kafka_external_port: 9094
-
-# Storage
-kafka_log_dirs: "/kafka-data"
-kafka_workspace: "/opt/kafka"
-
-# Controller Quorum
-kafka_controller_quorum_voters: "1@172.16.1.4:9093,2@172.16.1.5:9093,3@172.16.1.6:9093"
-
-# Replication
-kafka_offsets_topic_replication_factor: 3
-kafka_transaction_state_log_replication_factor: 3
-kafka_transaction_state_log_min_isr: 2
-kafka_default_replication_factor: 3
-kafka_min_insync_replicas: 2
-
-# Network
-kafka_num_network_threads: 8
-kafka_num_io_threads: 16
-kafka_socket_send_buffer_bytes: 102400
-kafka_socket_receive_buffer_bytes: 102400
-kafka_socket_request_max_bytes: 104857600
-
-# Log Retention
-kafka_log_retention_hours: 168
-kafka_log_segment_bytes: 1073741824
-kafka_log_retention_check_interval_ms: 300000
