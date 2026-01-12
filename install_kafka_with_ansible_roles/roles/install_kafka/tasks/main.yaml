@@ -195,9 +195,9 @@
 
 - name: Wait for Kafka exporter endpoint
   wait_for:
-    host: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+    host: 127.0.0.1
     port: "{{ kafka_exporter_port }}"
     delay: 5
-    timeout: 30
+    timeout: 60
     state: started
     msg: "Kafka exporter not reachable on {{ inventory_hostname }}"
