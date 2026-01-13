@@ -149,7 +149,6 @@
     disable_gpg_check: false
   when: ansible_os_family == "RedHat"
 
-
 - name: Provision Grafana Prometheus datasource
   ansible.builtin.template:
     src: grafana-datasource.yml.j2
