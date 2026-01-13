@@ -61,6 +61,40 @@
     state: started
     enabled: true
 
+# --- Prometheus Service Discovery Setup ---
+
+- name: Create Prometheus file_sd directory
+  ansible.builtin.file:
+    path: /etc/prometheus/file_sd
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+
+- name: Generate Kafka Exporter targets
+  ansible.builtin.template:
+    src: targets.json.j2
+    dest: /etc/prometheus/file_sd/kafka_targets.json
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  vars:
+    target_ips: "{{ broker_ips }}"
+    target_port: "{{ kafka_exporter_port }}"
+
+- name: Generate Node Exporter targets
+  ansible.builtin.template:
+    src: targets.json.j2
+    dest: /etc/prometheus/file_sd/node_targets.json
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  vars:
+    target_ips: "{{ broker_ips }}"
+    target_port: "{{ node_exporter_port }}"
+
+# --- Grafana Setup ---
+
 - name: Configure Grafana yum repo
   ansible.builtin.copy:
     dest: /etc/yum.repos.d/grafana.repo
@@ -88,8 +122,95 @@
     dest: /etc/grafana/provisioning/datasources/prometheus.yaml
     mode: "0644"
 
+- name: Create Grafana dashboards directory
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+
+- name: Provision Grafana dashboards provider
+  ansible.builtin.template:
+    src: grafana-dashboards.yml.j2
+    dest: /etc/grafana/provisioning/dashboards/dashboards.yaml
+    mode: "0644"
+
+- name: Deploy Grafana Dashboards (Content)
+  ansible.builtin.copy:
+    dest: "/var/lib/grafana/dashboards/{{ item.name }}"
+    content: "{{ item.content }}"
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop:
+    - name: "node-exporter.json"
+      content: |
+        {
+          "title": "Node Exporter",
+          "panels": [
+            { "type": "graph", "title": "CPU Usage", "targets": [{ "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)" }] },
+            { "type": "graph", "title": "Memory Usage", "targets": [{ "expr": "100 * (1 - ((node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes) / node_memory_MemTotal_bytes))" }] },
+            { "type": "graph", "title": "Disk I/O", "targets": [{ "expr": "rate(node_disk_io_time_seconds_total[1m])" }] }
+          ],
+          "schemaVersion": 16,
+          "version": 1
+        }
+    - name: "kafka-cluster.json"
+      content: |
+        {
+          "title": "Kafka Cluster",
+          "panels": [
+            { "type": "stat", "title": "Active Brokers", "targets": [{ "expr": "count(kafka_brokers)" }] },
+            { "type": "graph", "title": "Messages In/Sec", "targets": [{ "expr": "sum(rate(kafka_topic_partition_current_offset[1m]))" }] },
+            { "type": "graph", "title": "Consumer Lag", "targets": [{ "expr": "sum(kafka_consumergroup_lag) by (consumergroup)" }] }
+          ],
+          "schemaVersion": 16,
+          "version": 1
+        }
+
 - name: Ensure Grafana service is running
   ansible.builtin.systemd:
     name: grafana-server
     state: started
     enabled: true
+
+- name: Create node_exporter user
+  ansible.builtin.user:
+    name: nodeexp
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+
+- name: Download node_exporter
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_download_url }}"
+    dest: /tmp/node_exporter.tar.gz
+    mode: "0644"
+
+- name: Unpack node_exporter
+  ansible.builtin.unarchive:
+    src: /tmp/node_exporter.tar.gz
+    dest: /opt
+    remote_src: true
+    creates: "/opt/node_exporter-{{ node_exporter_version }}.linux-amd64"
+
+- name: Symlink node_exporter
+  ansible.builtin.file:
+    src: "/opt/node_exporter-{{ node_exporter_version }}.linux-amd64"
+    dest: /opt/node_exporter
+    state: link
+    force: true
+
+- name: Install node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+
+- name: Start node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+    daemon_reload: true

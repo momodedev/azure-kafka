@@ -8,15 +8,11 @@ scrape_configs:
       - targets: ["localhost:9090"]
 
   - job_name: "kafka-exporter"
-    static_configs:
-      - targets:
-{% for ip in broker_ips %}
-          - "{{ ip }}:9308"
-{% endfor %}
+    file_sd_configs:
+      - files: 
+        - /etc/prometheus/file_sd/kafka_targets.json
 
   - job_name: "node-exporter"
-    static_configs:
-      - targets:
-{% for ip in broker_ips %}
-          - "{{ ip }}:9100"
-{% endfor %}
+    file_sd_configs:
+      - files: 
+        - /etc/prometheus/file_sd/node_targets.json

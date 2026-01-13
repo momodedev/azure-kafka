@@ -13,3 +13,6 @@ kafka_exporter_version: "1.7.0"
 kafka_exporter_download_url: "https://github.com/danielqsj/kafka_exporter/releases/download/v{{ kafka_exporter_version }}/kafka_exporter-{{ kafka_exporter_version }}.linux-amd64.tar.gz"
 prometheus_sd_output_path: "generated/prometheus/kafka_targets.json"
 kafka_version: "3.9.1"
+node_exporter_version: "1.8.1"
+node_exporter_port: 9100
+node_exporter_download_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"

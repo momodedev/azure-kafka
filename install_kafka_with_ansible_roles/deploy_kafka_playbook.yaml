@@ -32,6 +32,7 @@
         kafka_node_id: "{{ groups['kafka'].index(inventory_hostname) + 1 }}"
   roles:
     - install_kafka
+    - node_exporter
 
 - name: Generate Prometheus targets for Kafka exporters
   hosts: localhost
