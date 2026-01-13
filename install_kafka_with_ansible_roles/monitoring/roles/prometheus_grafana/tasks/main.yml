@@ -160,9 +160,12 @@
 
 - name: Copy Grafana dashboard JSONs
   ansible.builtin.copy:
-    src: dashboards/
-    dest: /etc/grafana/provisioning/dashboards/ansible/
+    src: "{{ role_path }}/templates/dashboards/{{ item }}"
+    dest: "/etc/grafana/provisioning/dashboards/ansible/{{ item }}"
     mode: '0644'
+  loop:
+    - kafka_cluster_dashboard.json
+    - node_exporter_dashboard.json
   tags: grafana
 
 - name: Enable and start Grafana service
