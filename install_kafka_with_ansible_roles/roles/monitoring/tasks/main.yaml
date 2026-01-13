@@ -61,7 +61,72 @@
     state: started
     enabled: true
 
-- name: Configure Grafana yum repo
+# --- Prometheus Service Discovery Setup ---
+
+- name: Create Prometheus file_sd directory
+  ansible.builtin.file:
+    path: /etc/prometheus/file_sd
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: "0755"
+
+- name: Generate Kafka Exporter targets
+  ansible.builtin.template:
+    src: targets.json.j2
+    dest: /etc/prometheus/file_sd/kafka_targets.json
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  vars:
+    target_ips: "{{ broker_ips }}"
+    target_port: "{{ kafka_exporter_port }}"
+
+- name: Generate Node Exporter targets
+  ansible.builtin.template:
+    src: targets.json.j2
+    dest: /etc/prometheus/file_sd/node_targets.json
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  vars:
+    target_ips: "{{ broker_ips }}"
+    target_port: "{{ node_exporter_port }}"
+
+# --- Grafana Setup ---
+
+- name: Install dependencies (Debian)
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - software-properties-common
+      - wget
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Add Grafana GPG key (Debian)
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /usr/share/keyrings/grafana.key
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: Add Grafana repo (Debian)
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
+    state: present
+    filename: grafana
+  when: ansible_os_family == "Debian"
+
+- name: Install Grafana (Debian)
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Configure Grafana yum repo (RedHat)
   ansible.builtin.copy:
     dest: /etc/yum.repos.d/grafana.repo
     mode: "0644"
@@ -74,13 +139,15 @@
       gpgcheck=1
       gpgkey=https://packages.grafana.com/gpg.key
       exclude=gf-enterprise*
+  when: ansible_os_family == "RedHat"
 
-- name: Install Grafana
+- name: Install Grafana (RedHat)
   ansible.builtin.dnf:
     name: grafana
     state: present
     update_cache: true
     disable_gpg_check: false
+  when: ansible_os_family == "RedHat"
 
 - name: Provision Grafana Prometheus datasource
   ansible.builtin.template:
@@ -88,8 +155,131 @@
     dest: /etc/grafana/provisioning/datasources/prometheus.yaml
     mode: "0644"
 
+- name: Create Grafana dashboards directory
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: grafana
+    group: grafana
+    mode: "0755"
+
+- name: Provision Grafana dashboards provider
+  ansible.builtin.template:
+    src: grafana-dashboards.yml.j2
+    dest: /etc/grafana/provisioning/dashboards/dashboards.yaml
+    mode: "0644"
+
+- name: Deploy Grafana Dashboards (Content)
+  ansible.builtin.copy:
+    dest: "/var/lib/grafana/dashboards/{{ item.name }}"
+    content: "{{ item.content }}"
+    owner: grafana
+    group: grafana
+    mode: "0644"
+  loop:
+    - name: "node-exporter.json"
+      content: |
+        {
+          "title": "Node Exporter",
+          "panels": [
+            { "type": "graph", "title": "CPU Usage", "targets": [{ "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)" }] },
+            { "type": "graph", "title": "Memory Usage", "targets": [{ "expr": "100 * (1 - ((node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes) / node_memory_MemTotal_bytes))" }] },
+            { "type": "graph", "title": "Disk I/O", "targets": [{ "expr": "rate(node_disk_io_time_seconds_total[1m])" }] }
+          ],
+          "schemaVersion": 16,
+          "version": 1
+        }
+    - name: "kafka-cluster.json"
+      content: |
+        {
+          "title": "Kafka Cluster",
+          "panels": [
+            { "type": "stat", "title": "Active Brokers", "targets": [{ "expr": "count(kafka_brokers)" }] },
+            { "type": "graph", "title": "Messages In/Sec", "targets": [{ "expr": "sum(rate(kafka_topic_partition_current_offset[1m]))" }] },
+            { "type": "graph", "title": "Consumer Lag", "targets": [{ "expr": "sum(kafka_consumergroup_lag) by (consumergroup)" }] }
+          ],
+          "schemaVersion": 16,
+          "version": 1
+        }
+
 - name: Ensure Grafana service is running
   ansible.builtin.systemd:
     name: grafana-server
     state: started
     enabled: true
+
+- name: Create node_exporter user
+  ansible.builtin.user:
+    name: nodeexp
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+
+- name: Download node_exporter
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_download_url }}"
+    dest: /tmp/node_exporter.tar.gz
+    mode: "0644"
+
+- name: Unpack node_exporter
+  ansible.builtin.unarchive:
+    src: /tmp/node_exporter.tar.gz
+    dest: /opt
+    remote_src: true
+    creates: "/opt/node_exporter-{{ node_exporter_version }}.linux-amd64"
+
+- name: Symlink node_exporter
+  ansible.builtin.file:
+    src: "/opt/node_exporter-{{ node_exporter_version }}.linux-amd64"
+    dest: /opt/node_exporter
+    state: link
+    force: true
+
+- name: Install node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+
+- name: Start node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# --- Firewall Configuration ---
+
+- name: Check UFW status (Debian/Ubuntu)
+  ansible.builtin.command: ufw status
+  register: ufw_status
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family == "Debian"
+
+- name: Allow Grafana port 3000 (UFW)
+  ansible.builtin.command: ufw allow 3000/tcp
+  when: ansible_os_family == "Debian" and ufw_status.rc == 0 and 'Status: active' in ufw_status.stdout
+
+- name: Allow Prometheus port 9090 (UFW)
+  ansible.builtin.command: ufw allow 9090/tcp
+  when: ansible_os_family == "Debian" and ufw_status.rc == 0 and 'Status: active' in ufw_status.stdout
+
+- name: Allow Grafana port 3000 (Firewalld)
+  ansible.posix.firewalld:
+    port: 3000/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  when: ansible_os_family == "RedHat"
+  ignore_errors: true
+
+- name: Allow Prometheus port 9090 (Firewalld)
+  ansible.posix.firewalld:
+    port: 9090/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  when: ansible_os_family == "RedHat"
+  ignore_errors: true
+

@@ -1,0 +1,33 @@
+{
+  "title": "Kafka Cluster - Basic Metrics",
+  "roles": [ ],
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Messages In Per Second",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(kafka_brokers_messages_in_total[5m])",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "graph",
+      "title": "Active Brokers",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(kafka_brokers{} > 0)",
+          "legendFormat": "broker count"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    }
+  ],
+  "schemaVersion": 34,
+  "version": 1,
+  "overwrite": true
+}

@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+
+  # scrape Kafka exporter instances on each broker
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets:
+{% for host in groups['kafka_broker'] %}
+          - '{{ hostvars[host]["ansible_host"] }}:9308'
+{% endfor %}
+
+  # scrape node exporter on every broker to collect host metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+{% for host in groups['kafka_broker'] %}
+          - '{{ hostvars[host]["ansible_host"] }}:9100'
+{% endfor %}

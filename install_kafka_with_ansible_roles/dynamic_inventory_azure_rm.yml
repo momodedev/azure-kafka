@@ -1,11 +1,25 @@
 plugin: azure.azcollection.azure_rm
 auth_source: msi
 
-resource_groups:
-  - mall-kafka
-
+#Target the specific resource group for Kafka
 include_vmss_resource_groups:
-  - mall-kafka
+  - mall
 
+# Use the VM Name (e.g., kafka-prod-brokers_0) as the Ansible identifier
+# This ensures hosts appear in the inventory even if IP attributes are nested differently
 hostnames:
-  - private_ipv4_addresses[0]
+  - name
+
+conditional_groups:
+  # Create 'kafka' group for all hosts with 'kafka' in their name
+  kafka: "'kafka' in name"
+
+compose:
+  # Map the private IP to ansible_host for SSH connection
+  ansible_host: private_ipv4_addresses[0]
+  
+  # Define the 'private_ip' variable required by the server.properties.j2 template
+  private_ip: private_ipv4_addresses[0]
+  
+  # Ensure the correct SSH user is used
+  ansible_user: "'rockyadmin'"
