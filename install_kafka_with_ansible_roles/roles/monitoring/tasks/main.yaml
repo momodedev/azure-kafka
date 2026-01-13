@@ -95,7 +95,38 @@
 
 # --- Grafana Setup ---
 
-- name: Configure Grafana yum repo
+- name: Install dependencies (Debian)
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - software-properties-common
+      - wget
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Add Grafana GPG key (Debian)
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg.key
+    dest: /usr/share/keyrings/grafana.key
+    mode: '0644'
+  when: ansible_os_family == "Debian"
+
+- name: Add Grafana repo (Debian)
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
+    state: present
+    filename: grafana
+  when: ansible_os_family == "Debian"
+
+- name: Install Grafana (Debian)
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Configure Grafana yum repo (RedHat)
   ansible.builtin.copy:
     dest: /etc/yum.repos.d/grafana.repo
     mode: "0644"
@@ -108,13 +139,16 @@
       gpgcheck=1
       gpgkey=https://packages.grafana.com/gpg.key
       exclude=gf-enterprise*
+  when: ansible_os_family == "RedHat"
 
-- name: Install Grafana
+- name: Install Grafana (RedHat)
   ansible.builtin.dnf:
     name: grafana
     state: present
     update_cache: true
     disable_gpg_check: false
+  when: ansible_os_family == "RedHat"
+
 
 - name: Provision Grafana Prometheus datasource
   ansible.builtin.template:
@@ -214,3 +248,39 @@
     state: started
     enabled: true
     daemon_reload: true
+
+# --- Firewall Configuration ---
+
+- name: Check UFW status (Debian/Ubuntu)
+  ansible.builtin.command: ufw status
+  register: ufw_status
+  changed_when: false
+  failed_when: false
+  when: ansible_os_family == "Debian"
+
+- name: Allow Grafana port 3000 (UFW)
+  ansible.builtin.command: ufw allow 3000/tcp
+  when: ansible_os_family == "Debian" and ufw_status.rc == 0 and 'Status: active' in ufw_status.stdout
+
+- name: Allow Prometheus port 9090 (UFW)
+  ansible.builtin.command: ufw allow 9090/tcp
+  when: ansible_os_family == "Debian" and ufw_status.rc == 0 and 'Status: active' in ufw_status.stdout
+
+- name: Allow Grafana port 3000 (Firewalld)
+  ansible.posix.firewalld:
+    port: 3000/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  when: ansible_os_family == "RedHat"
+  ignore_errors: true
+
+- name: Allow Prometheus port 9090 (Firewalld)
+  ansible.posix.firewalld:
+    port: 9090/tcp
+    permanent: true
+    state: enabled
+    immediate: true
+  when: ansible_os_family == "RedHat"
+  ignore_errors: true
+

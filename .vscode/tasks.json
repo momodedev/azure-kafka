@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "notify_firewall",
+			"type": "shell",
+			"command": "echo \"Allowing ports 3000 and 9090 on firewall (if ufw/firewalld present)\"",
+			"args": [
+				"allow",
+				"3000",
+				"9090"
+			],
+			"group": "build"
+		}
+	]
+}
