@@ -9,3 +9,11 @@ include_vmss_resource_groups:
 
 hostnames:
   - private_ipv4_addresses[0]
+
+conditional_groups:
+  # Create the 'kafka' group for any host whose name contains 'kafka'
+  kafka: "'kafka' in name"
+
+compose:
+  # Set the correct SSH user for the Kafka brokers
+  ansible_user: "'rockyadmin'"
