@@ -21,6 +21,7 @@ echo "[kafka]"
 index=1
 while IFS= read -r ip; do
     [ -z "$ip" ] && continue
+    # Format: hostname ansible_host=IP private_ip=IP kafka_node_id=INDEX
     printf 'kafka-broker-%02d ansible_host=%s private_ip=%s kafka_node_id=%d\n' "$index" "$ip" "$ip" "$index"
     index=$((index + 1))
 done <<< "$private_ips"
