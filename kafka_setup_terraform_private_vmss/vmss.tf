@@ -88,7 +88,6 @@ resource "azapi_resource_action" "attach_data_disk" {
   action      = "attachDetachDataDisks"
   method      = "POST"
 
-  # Fix: Use HCL object directly instead of jsonencode
   body = {
     dataDisksToAttach = [
       {
