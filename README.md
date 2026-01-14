@@ -176,6 +176,24 @@ This will instruct the control node to destroy the remote Kafka infrastructure.
 
 ---
 
+## Architecture Changes
+
+This deployment uses **individual Virtual Machines** instead of Virtual Machine Scale Sets (VMSS) for the Kafka brokers. This provides:
+
+- **Better control** over individual broker configurations
+- **Easier debugging** with direct VM access
+- **More flexible scaling** - add or remove specific VMs
+- **Simpler disk management** with direct disk attachments
+
+### Scaling the Cluster
+
+To change the number of Kafka brokers, modify the `kafka_instance_count` variable:
+
+```hcl
+# In secret.tfvars or variables.tf
+kafka_instance_count = 5  # Can be 3, 5, 7, 9, etc. (odd numbers recommended for quorum)
+```
+
 ## Conclusion
 
 After executing terraform apply (using either method), Kafka will be fully deployed and configured on your Azure environment. You can now interact with your Kafka instances.
