@@ -108,6 +108,7 @@ resource "null_resource" "launch_ansible_playbook" {
 
   provisioner "local-exec" {
     working_dir = "../install_kafka_with_ansible_roles"
+    interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
       az login --identity >/dev/null
