@@ -10,7 +10,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   upgrade_mode        = "Manual"
   computer_name_prefix = "kafka-prod"
   overprovision       = false
-  single_placement_group = true
+  orchestration_mode  = "Flexible"
+  platform_fault_domain_count = 1
 
   source_image_reference {
     publisher = "resf"
@@ -36,9 +37,6 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
   }
-
-  # Premium SSD v2 data disks are attached separately via azapi_resource
-  # due to Terraform/AzureRM provider limitations for IOPS/throughput configuration
 
   network_interface {
     name                      = "kafka-prod-nic"

@@ -52,6 +52,18 @@ variable "kafka_data_disk_size_gb" {
   description = "Premium SSD v2 data disk size attached to each Kafka broker (GiB)."
 }
 
+variable "kafka_data_disk_iops" {
+  type        = number
+  default     = 3000
+  description = "Provisioned IOPS for Premium SSD v2 data disk (3000-80000, must be >= 3 IOPS per GiB)."
+}
+
+variable "kafka_data_disk_throughput_mbps" {
+  type        = number
+  default     = 125
+  description = "Provisioned throughput (MB/s) for Premium SSD v2 data disk (125-1200, must be >= 0.25 MB/s per provisioned IOPS)."
+}
+
 variable "monitor_vm_name" {
   type        = string
   default     = "kafka-prod-monitor"

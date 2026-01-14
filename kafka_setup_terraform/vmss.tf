@@ -10,7 +10,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   upgrade_mode        = "Manual"
   computer_name_prefix = "kafka-prod"
   overprovision       = false
-  single_placement_group = true
+  orchestration_mode  = "Flexible"
+  platform_fault_domain_count = 1
 
   source_image_reference {
     publisher = "resf"
@@ -34,14 +35,6 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
-  }
-
-  data_disk {
-    lun                  = 0
-    caching              = "None"
-    create_option        = "Empty"
-    disk_size_gb         = var.kafka_data_disk_size_gb
     storage_account_type = "Premium_LRS"
   }
 
@@ -84,4 +77,49 @@ resource "null_resource" "launch_ansible_playbook" {
     working_dir = "../install_kafka_with_ansible_roles"
     command      = "mkdir -p generated && ./inventory_script_hosts.sh ${azurerm_resource_group.example.name} ${azurerm_linux_virtual_machine_scale_set.brokers.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
   }
+}
+
+
+resource "azapi_resource" "kafka_data_disk" {
+  count     = var.kafka_instance_count
+  type      = "Microsoft.Compute/disks@2024-03-02"
+  name      = "kafka-data-disk-${count.index}"
+  location  = azurerm_resource_group.example.location
+  parent_id = azurerm_resource_group.example.id
+
+  body = {
+    sku = {
+      name = "PremiumV2_LRS"
+    }
+    properties = {
+      diskSizeGB           = var.kafka_data_disk_size_gb
+      diskIOPSReadWrite    = var.kafka_data_disk_iops
+      diskMBpsReadWrite    = var.kafka_data_disk_throughput_mbps
+      creationData = {
+        createOption = "Empty"
+      }
+    }
+  }
+}
+
+
+resource "azapi_resource_action" "attach_data_disk" {
+  count       = var.kafka_instance_count
+  resource_id = "${azurerm_linux_virtual_machine_scale_set.brokers.id}/virtualMachines/${count.index}"
+  type        = "Microsoft.Compute/virtualMachineScaleSets/virtualMachines@2025-04-01"
+  action      = "attachDetachDataDisks"
+  method      = "POST"
+
+  body = {
+    dataDisksToAttach = [
+      {
+        diskId  = azapi_resource.kafka_data_disk[count.index].id
+        lun     = 0
+        caching = "None"
+      }
+    ]
+    dataDisksToDetach = []
+  }
+
+  depends_on = [azapi_resource.kafka_data_disk, azurerm_linux_virtual_machine_scale_set.brokers]
 }
