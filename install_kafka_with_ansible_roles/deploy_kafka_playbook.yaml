@@ -18,9 +18,9 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Build kafka_controller_quorum_voters dynamically
+    - name: Build kafka_controller_quorum_voters dynamically (with private IPs)
       set_fact:
-        kafka_controller_quorum_voters: "{{ groups['kafka'] | sort | map('extract', hostvars, 'private_ip') | list | zip(range(1, groups['kafka']|length + 1)) | map('join', '@') | map('regex_replace', '(.*)@(.*)', '\\2:9093,\\1') | list | join(',') | regex_replace(',$', '') }}"
+        kafka_controller_quorum_voters: "{{ (groups['kafka'] | sort | map('extract', hostvars, 'private_ip') | zip(range(1, groups['kafka']|length + 1)) | map('reverse') | map('join', '@') | map('regex_replace', '(.*)', '\\1:9093') | join(',')) }}"
       register: quorum_result
 
     - name: Display computed quorum voters
