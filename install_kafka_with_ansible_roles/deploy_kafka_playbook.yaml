@@ -6,7 +6,7 @@
     - name: Ensure VM is reachable over SSH
       wait_for:
         port: 22
-        host: "{{ inventory_hostname }}"
+        host: "{{ ansible_host }}"
         delay: 10
         timeout: 120
       vars:
