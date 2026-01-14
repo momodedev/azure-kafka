@@ -150,7 +150,7 @@
 
 - name: Wait for Kafka client listener
   wait_for:
-    host: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+    host: "{{ kafka_advertised_host }}"
     port: "{{ kafka_client_port }}"
     delay: 5
     timeout: 60
@@ -159,7 +159,7 @@
 
 - name: Wait for Kafka controller listener
   wait_for:
-    host: "{{ private_ip | default(ansible_default_ipv4.address) }}"
+    host: "{{ kafka_advertised_host }}"
     port: "{{ kafka_controller_port }}"
     delay: 5
     timeout: 60

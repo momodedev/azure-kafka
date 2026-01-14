@@ -8,9 +8,9 @@ kafka_controller_port: 9093
 kafka_client_port: 9092
 kafka_external_port: 9094
 
-# Storage
-kafka_log_dirs: "/kafka-data"
-kafka_data_dir: "/kafka-data"
+# Storage - MUST match the directory created by setup_environment role
+kafka_log_dirs: "/opt/kafka/data"
+kafka_data_dir: "/opt/kafka/data"
 kafka_workspace: "/opt/kafka"
 
 # Controller Quorum (dynamically generated in tasks, not hardcoded)
