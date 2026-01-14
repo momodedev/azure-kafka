@@ -26,14 +26,14 @@ resource "azurerm_network_security_group" "example" {
   resource_group_name = azurerm_resource_group.example.name
 
   security_rule {
-    name                       = "ssh"
+    name                       = "ssh-from-control"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "*"
+    source_address_prefix      = "172.17.0.0/16"  # Control VNet
     destination_address_prefix = "*"
   }
 
@@ -108,6 +108,8 @@ resource "azurerm_virtual_network_peering" "kafka-to-control" {
   resource_group_name       = azurerm_resource_group.example.name
   virtual_network_name      = azurerm_virtual_network.kafka.name
   remote_virtual_network_id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/resourceGroups/control_rg/providers/Microsoft.Network/virtualNetworks/control-vnet"
+  allow_virtual_network_access = true
+  allow_forwarded_traffic      = true
 }
 
 resource "azurerm_virtual_network_peering" "control-to-kafka" {
@@ -115,6 +117,8 @@ resource "azurerm_virtual_network_peering" "control-to-kafka" {
   resource_group_name       = "control_rg"
   virtual_network_name      = "control-vnet"
   remote_virtual_network_id = azurerm_virtual_network.kafka.id
+  allow_virtual_network_access = true
+  allow_forwarded_traffic      = true
 }
 
 resource "azurerm_public_ip" "example" {

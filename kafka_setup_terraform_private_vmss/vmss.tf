@@ -68,24 +68,6 @@ resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   }
 }
 
-# Custom Script Extension to bootstrap Kafka on each VM
-resource "azurerm_virtual_machine_extension" "kafka_bootstrap" {
-  count                    = var.kafka_instance_count
-  name                     = "kafka-bootstrap-${count.index}"
-  virtual_machine_id       = azurerm_linux_virtual_machine.kafka_brokers[count.index].id
-  publisher                = "Microsoft.Azure.Extensions"
-  type                     = "CustomScript"
-  type_handler_version     = "2.1"
-  auto_upgrade_minor_version = true
-
-  settings = jsonencode({
-    fileUris = [
-      "https://raw.githubusercontent.com/momodedev/azure-kafka/main/kafka_setup_terraform_private_vmss/bootstrap_kafka.sh"
-    ]
-    commandToExecute = "bash bootstrap_kafka.sh"
-  })
-}
-
 # PremiumV2_LRS Data Disks - Using azurerm_managed_disk (proven pattern from tf-mysql)
 resource "azurerm_managed_disk" "kafka_data_disk" {
   count               = var.kafka_instance_count
@@ -118,18 +100,19 @@ output "kafka_private_ips" {
   value       = azurerm_linux_virtual_machine.kafka_brokers[*].private_ip_address
 }
 
-# Launch monitoring playbook after Kafka bootstrap is complete
+# Launch Ansible playbook from control node after all VMs are ready
 resource "null_resource" "launch_ansible_playbook" {
   triggers = {
-    kafka_bootstrap = join(",", azurerm_virtual_machine_extension.kafka_bootstrap[*].id)
+    private_ips = join(",", azurerm_linux_virtual_machine.kafka_brokers[*].private_ip_address)
   }
 
   provisioner "local-exec" {
     working_dir = "../install_kafka_with_ansible_roles"
-    command     = "echo 'Kafka cluster bootstrap via VM extensions complete' && sleep 30"
+    command     = "az login --identity >/dev/null && mkdir -p generated && bash ./inventory_script_hosts_vms.sh ${azurerm_resource_group.example.name} ${var.kafka_admin_username} > generated/kafka_hosts && cat generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
   }
 
   depends_on = [
-    azurerm_virtual_machine_extension.kafka_bootstrap
+    azurerm_virtual_machine_data_disk_attachment.kafka_data_disk,
+    azurerm_linux_virtual_machine.kafka_brokers
   ]
 }
