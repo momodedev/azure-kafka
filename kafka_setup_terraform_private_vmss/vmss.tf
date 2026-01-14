@@ -29,7 +29,7 @@ resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   resource_group_name = azurerm_resource_group.example.name
   size                = var.kafka_vm_size
   # Deploy ALL VMs in Zone 1 to avoid capacity issues and disk alignment errors
-  zone                = "1"
+  zone                = "2"
   network_interface_ids = [
     azurerm_network_interface.kafka_brokers[count.index].id
   ]
@@ -82,7 +82,7 @@ resource "azapi_resource" "kafka_data_disk" {
       name = "PremiumV2_LRS"
     }
     # All disks in Zone 1 to match VMs
-    zones = ["1"]
+    zones = ["2"]
     properties = {
       diskSizeGB           = var.kafka_data_disk_size_gb
       diskIOPSReadWrite    = var.kafka_data_disk_iops

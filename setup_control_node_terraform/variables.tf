@@ -42,4 +42,10 @@ variable "kafka_data_disk_throughput_mbps" {
   default     = 125
 }
 
+variable "kafka_vm_size" {
+  description = "Azure VM size for Kafka brokers."
+  type        = string
+  default     = "Standard_D8s_v5"
+}
+
 
