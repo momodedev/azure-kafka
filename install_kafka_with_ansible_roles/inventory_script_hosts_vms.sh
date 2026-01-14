@@ -11,20 +11,26 @@ fi
 resource_group="$1"
 admin_user="$2"
 
-# Get all VMs with names starting with "kafka-prod-broker-"
-vm_list=$(az vm list -g "$resource_group" --query "[?starts_with(name, 'kafka-prod-broker-')]" -o json)
+# Get all VMs with names starting with "kafka-prod-broker-" sorted by name
+vm_names=$(az vm list -g "$resource_group" --query "[?starts_with(name, 'kafka-prod-broker-')].name" -o tsv | sort)
 
-# Extract private IPs sorted by VM name
-private_ips=$(echo "$vm_list" | jq -r 'sort_by(.name) | .[].privateIps' | tr ',' '\n')
+# Extract private IPs for each VM
+private_ips=()
+for vm_name in $vm_names; do
+    private_ip=$(az vm list-ip-addresses -g "$resource_group" -n "$vm_name" --query "[0].virtualMachine.network.privateIpAddresses[0]" -o tsv)
+    if [[ -z "$private_ip" || "$private_ip" == "null" ]]; then
+        echo "Warning: Could not get private IP for $vm_name" >&2
+        continue
+    fi
+    private_ips+=("$private_ip")
+done
 
 echo "[kafka]"
 index=1
-while IFS= read -r ip; do
-    [ -z "$ip" ] && continue
-    # Format: hostname ansible_host=IP private_ip=IP kafka_node_id=INDEX
+for ip in "${private_ips[@]}"; do
     printf 'kafka-broker-%02d ansible_host=%s private_ip=%s kafka_node_id=%d\n' "$index" "$ip" "$ip" "$index"
     index=$((index + 1))
-done <<< "$private_ips"
+done
 
 echo "[all:vars]"
 echo "ansible_user=$admin_user"
@@ -41,8 +47,7 @@ mgmt-kafka-monitor ansible_connection=local ansible_user=azureadmin
 EOF
 
 index=1
-while IFS= read -r ip; do
-    [ -z "$ip" ] && continue
+for ip in "${private_ips[@]}"; do
     printf 'kafka-broker-%02d ansible_host=%s ansible_user=%s\n' "$index" "$ip" "$admin_user" >> monitoring/generated_inventory.ini
     index=$((index + 1))
-done <<< "$private_ips"
+done
