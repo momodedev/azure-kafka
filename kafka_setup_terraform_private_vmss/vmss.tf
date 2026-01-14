@@ -126,13 +126,6 @@ resource "null_resource" "launch_ansible_playbook" {
   depends_on = [data.azurerm_virtual_machine_scale_set.brokers]
 }
 
-data "azurerm_virtual_machine_scale_set" "brokers" {
-  name                = azurerm_linux_virtual_machine_scale_set.brokers.name
-  resource_group_name = azurerm_resource_group.example.name
-  depends_on          = [azapi_resource_action.attach_data_disk]
-}
-
-
 output "kafka_private_ips" {
   description = "Private IP addresses assigned to Kafka brokers."
   value       = data.azurerm_virtual_machine_scale_set.brokers.instances.*.private_ip_address
