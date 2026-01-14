@@ -28,6 +28,22 @@ echo "ansible_user=$admin_user"
 echo "ansible_ssh_private_key_file=~/.ssh/id_rsa"
 echo "ansible_python_interpreter=/usr/bin/python3"
 
+# New: also emit monitoring inventory (control node as management_node, brokers as kafka_broker)
+mkdir -p monitoring
+cat > monitoring/generated_inventory.ini <<'EOF'
+[management_node]
+mgmt-kafka-monitor ansible_connection=local ansible_user=azureadmin
+
+[kafka_broker]
+EOF
+
+index=1
+while IFS= read -r ip; do
+    [ -z "$ip" ] && continue
+    printf 'kafka-broker-%02d ansible_host=%s ansible_user=%s\n' "$index" "$ip" "$admin_user" >> monitoring/generated_inventory.ini
+    index=$((index + 1))
+done <<< "$private_ips"
+
 
 
 
