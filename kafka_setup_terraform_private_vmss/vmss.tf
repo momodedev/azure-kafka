@@ -11,7 +11,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   computer_name_prefix = "kafka-prod"
   overprovision       = false
   
-  #orchestration_mode       = "Flexible"
+  orchestration_mode       = "Flexible"
   platform_fault_domain_count = 1
 
   source_image_reference {
