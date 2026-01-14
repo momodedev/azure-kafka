@@ -41,8 +41,8 @@ variable "kafka_vm_size" {
 
 variable "kafka_data_disk_size_gb" {
   type        = number
-  default     = 256
-  description = "Capacity, in GiB, of the Premium SSD v2 data disk attached to each broker instance."
+  default     = 1024  # Changed from 256 to get P30 tier (5000 IOPS, 200 MB/s)
+  description = "Capacity, in GiB, of the Premium SSD data disk attached to each broker instance."
 }
 
 variable "kafka_data_disk_iops" {

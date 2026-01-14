@@ -21,15 +21,14 @@ resource "azurerm_network_interface_security_group_association" "kafka_brokers" 
   network_security_group_id = azurerm_network_security_group.example.id
 }
 
-# Create individual Kafka broker VMs
+# Create individual Kafka broker VMs in Zone 2
 resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   count               = var.kafka_instance_count
   name                = "kafka-prod-broker-${count.index}"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
   size                = var.kafka_vm_size
-  # Deploy ALL VMs in Zone 1 to avoid capacity issues and disk alignment errors
-  zone                = "2"
+  zone                = "2"  # Deploy in Zone 2
   network_interface_ids = [
     azurerm_network_interface.kafka_brokers[count.index].id
   ]
@@ -69,40 +68,30 @@ resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   }
 }
 
-# Premium SSD v2 Data Disk with zone assignment
-resource "azapi_resource" "kafka_data_disk" {
-  count     = var.kafka_instance_count
-  type      = "Microsoft.Compute/disks@2024-03-02"
-  name      = "kafka-data-disk-${count.index}"
-  location  = azurerm_resource_group.example.location
-  parent_id = azurerm_resource_group.example.id
+# PremiumV2_LRS Data Disks - Using azurerm_managed_disk (proven pattern from tf-mysql)
+resource "azurerm_managed_disk" "kafka_data_disk" {
+  count               = var.kafka_instance_count
+  name                = "kafka-data-disk-${count.index}"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
 
-  body = {
-    sku = {
-      name = "PremiumV2_LRS"
-    }
-    # All disks in Zone 1 to match VMs
-    zones = ["2"]
-    properties = {
-      diskSizeGB           = var.kafka_data_disk_size_gb
-      diskIOPSReadWrite    = var.kafka_data_disk_iops
-      diskMBpsReadWrite    = var.kafka_data_disk_throughput_mbps
-      creationData = {
-        createOption = "Empty"
-      }
-    }
-  }
+  storage_account_type = "PremiumV2_LRS"
+  create_option        = "Empty"
+  disk_size_gb         = var.kafka_data_disk_size_gb
+  zone                 = "2"  # Must match VM zone
+
+  # PremiumV2 performance parameters
+  disk_iops_read_write    = var.kafka_data_disk_iops
+  disk_mbps_read_write    = var.kafka_data_disk_throughput_mbps
 }
 
-# Attach Premium SSD v2 disk to each VM
+# Attach data disks to each VM
 resource "azurerm_virtual_machine_data_disk_attachment" "kafka_data_disk" {
   count              = var.kafka_instance_count
-  managed_disk_id    = azapi_resource.kafka_data_disk[count.index].id
+  managed_disk_id    = azurerm_managed_disk.kafka_data_disk[count.index].id
   virtual_machine_id = azurerm_linux_virtual_machine.kafka_brokers[count.index].id
   lun                = 0
   caching            = "None"
-
-  depends_on = [azapi_resource.kafka_data_disk, azurerm_linux_virtual_machine.kafka_brokers]
 }
 
 # Output private IPs
