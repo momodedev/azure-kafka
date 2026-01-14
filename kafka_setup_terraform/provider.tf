@@ -1,9 +1,14 @@
 terraform {
   required_providers {
     azurerm = "~> 4.5"
-    azapi   = ">= 2.8"
+    azapi   = {
+      source  = "Azure/azapi"
+      version = ">= 2.8"
+    }
   }
 }
+
+provider "azapi" {}
 
 # Configure the Microsoft Azure Provider
 provider "azurerm" {
