@@ -70,9 +70,9 @@ resource "azapi_resource" "kafka_data_disk" {
       name = "PremiumV2_LRS"
     }
     properties = {
-      diskSizeGB = var.kafka_data_disk_size_gb
-      diskIOPSReadWrite = var.kafka_data_disk_iops
-      diskMBpsReadWrite = var.kafka_data_disk_throughput_mbps
+      diskSizeGB           = var.kafka_data_disk_size_gb
+      diskIOPSReadWrite    = var.kafka_data_disk_iops
+      diskMBpsReadWrite    = var.kafka_data_disk_throughput_mbps
       creationData = {
         createOption = "Empty"
       }
@@ -80,10 +80,11 @@ resource "azapi_resource" "kafka_data_disk" {
   }
 }
 
-# Attach Premium SSD v2 disk to each VMSS instance using the attachDetachDataDisks action
+# Attach Premium SSD v2 disk to each VMSS instance using attachDetachDataDisks action
 resource "azapi_resource_action" "attach_data_disk" {
   count       = var.kafka_instance_count
   resource_id = "${azurerm_linux_virtual_machine_scale_set.brokers.id}/virtualMachines/${count.index}"
+  type        = "Microsoft.Compute/virtualMachineScaleSets/virtualMachines@2025-04-01"
   action      = "attachDetachDataDisks"
   method      = "POST"
 
@@ -99,6 +100,30 @@ resource "azapi_resource_action" "attach_data_disk" {
   })
 
   depends_on = [azapi_resource.kafka_data_disk, azurerm_linux_virtual_machine_scale_set.brokers]
+}
+
+data "azurerm_virtual_machine_scale_set" "brokers" {
+  name                = azurerm_linux_virtual_machine_scale_set.brokers.name
+  resource_group_name = azurerm_resource_group.example.name
+  depends_on          = [azapi_resource_action.attach_data_disk]
+}
+
+output "kafka_private_ips" {
+  description = "Private IP addresses assigned to Kafka brokers."
+  value       = data.azurerm_virtual_machine_scale_set.brokers.instances.*.private_ip_address
+}
+
+resource "null_resource" "launch_ansible_playbook" {
+  triggers = {
+    private_ips = join(",", data.azurerm_virtual_machine_scale_set.brokers.instances.*.private_ip_address)
+  }
+
+  provisioner "local-exec" {
+    working_dir = "../install_kafka_with_ansible_roles"
+    command      = "az login --identity >/dev/null && mkdir -p generated && ./inventory_script_hosts.sh ${azurerm_resource_group.example.name} ${azurerm_linux_virtual_machine_scale_set.brokers.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
+  }
+
+  depends_on = [data.azurerm_virtual_machine_scale_set.brokers]
 }
 
 data "azurerm_virtual_machine_scale_set" "brokers" {
