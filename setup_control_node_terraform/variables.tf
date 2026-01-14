@@ -14,7 +14,6 @@ variable "github_token" {
   sensitive   = true
 }
 
-
 variable "ARM_SUBSCRIPTION_ID" {
   description = "subscription id"
   type        = string
@@ -29,6 +28,18 @@ variable "kafka_instance_count" {
   description = "Number of Kafka broker instances to provision in the VMSS."
   type        = number
   default     = 3
+}
+
+variable "kafka_data_disk_iops" {
+  description = "Provisioned IOPS for Kafka data disk (Premium SSD v2)."
+  type        = number
+  default     = 3000
+}
+
+variable "kafka_data_disk_throughput_mbps" {
+  description = "Provisioned throughput (MB/s) for Kafka data disk (Premium SSD v2)."
+  type        = number
+  default     = 125
 }
 
 

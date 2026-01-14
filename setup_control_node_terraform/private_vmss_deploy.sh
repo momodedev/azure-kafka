@@ -16,5 +16,7 @@ git -C "$REPO_DIR" fetch origin --prune && git -C "$REPO_DIR" reset --hard origi
 cd "$REPO_DIR/kafka_setup_terraform_private_vmss"
 echo "ARM_SUBSCRIPTION_ID=\"$1\"" > sub_id.tfvars
 echo "kafka_instance_count=${3:-3}" >> sub_id.tfvars
+echo "kafka_data_disk_iops=${4:-3000}" >> sub_id.tfvars
+echo "kafka_data_disk_throughput_mbps=${5:-125}" >> sub_id.tfvars
 terraform init
 terraform $2 -var-file='sub_id.tfvars' -auto-approve

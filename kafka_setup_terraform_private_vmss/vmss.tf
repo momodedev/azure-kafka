@@ -37,13 +37,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
     storage_account_type = "Premium_LRS"
   }
 
-  data_disk {
-    lun                  = 0
-    caching              = "None"
-    create_option        = "Empty"
-    disk_size_gb         = var.kafka_data_disk_size_gb
-    storage_account_type = "Premium_LRS"
-  }
+  # Premium SSD v2 data disks are attached separately via azapi_resource
+  # due to Terraform/AzureRM provider limitations for IOPS/throughput configuration
 
   network_interface {
     name                      = "kafka-prod-nic"
@@ -62,10 +57,54 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   }
 }
 
+# Premium SSD v2 Data Disk with configurable IOPS/Throughput
+resource "azapi_resource" "kafka_data_disk" {
+  count     = var.kafka_instance_count
+  type      = "Microsoft.Compute/disks@2024-03-02"
+  name      = "kafka-data-disk-${count.index}"
+  location  = azurerm_resource_group.example.location
+  parent_id = azurerm_resource_group.example.id
+
+  body = {
+    sku = {
+      name = "PremiumV2_LRS"
+    }
+    properties = {
+      diskSizeGB = var.kafka_data_disk_size_gb
+      diskIOPSReadWrite = var.kafka_data_disk_iops
+      diskMBpsReadWrite = var.kafka_data_disk_throughput_mbps
+      creationData = {
+        createOption = "Empty"
+      }
+    }
+  }
+}
+
+# Attach Premium SSD v2 disk to each VMSS instance
+resource "azapi_resource" "disk_attachment" {
+  count     = var.kafka_instance_count
+  type      = "Microsoft.Compute/virtualMachineScaleSets/virtualMachines/dataDisks@2024-03-01"
+  name      = "kafka-data-disk-${count.index}"
+  parent_id = "${azurerm_linux_virtual_machine_scale_set.brokers.id}/virtualMachines/${count.index}"
+
+  body = {
+    properties = {
+      lun = 0
+      createOption = "Attach"
+      managedDisk = {
+        id = azapi_resource.kafka_data_disk[count.index].id
+      }
+      caching = "None"
+    }
+  }
+
+  depends_on = [azapi_resource.kafka_data_disk]
+}
 
 data "azurerm_virtual_machine_scale_set" "brokers" {
   name                = azurerm_linux_virtual_machine_scale_set.brokers.name
   resource_group_name = azurerm_resource_group.example.name
+  depends_on          = [azapi_resource.disk_attachment]
 }
 
 

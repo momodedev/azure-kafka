@@ -172,7 +172,7 @@ resource "null_resource" "deploy_private_vmss"{
   }
   provisioner "remote-exec" {
     inline = [
-      "./private_vmss_deploy.sh ${var.ARM_SUBSCRIPTION_ID} ${var.tf_cmd_type} ${var.kafka_instance_count}",
+      "./private_vmss_deploy.sh ${var.ARM_SUBSCRIPTION_ID} ${var.tf_cmd_type} ${var.kafka_instance_count} ${var.kafka_data_disk_iops} ${var.kafka_data_disk_throughput_mbps}",
     ]
   }
   depends_on = [null_resource.Init_private_vmss]

@@ -44,3 +44,15 @@ variable "kafka_data_disk_size_gb" {
   default     = 256
   description = "Capacity, in GiB, of the Premium SSD v2 data disk attached to each broker instance."
 }
+
+variable "kafka_data_disk_iops" {
+  type        = number
+  default     = 3000
+  description = "Provisioned IOPS for Premium SSD v2 data disk (3000-80000, must be >= 3 IOPS per GiB)."
+}
+
+variable "kafka_data_disk_throughput_mbps" {
+  type        = number
+  default     = 125
+  description = "Provisioned throughput (MB/s) for Premium SSD v2 data disk (125-1200, must be >= 0.25 MB/s per provisioned IOPS)."
+}
