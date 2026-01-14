@@ -30,15 +30,23 @@
     - name: Assign deterministic node id
       set_fact:
         kafka_node_id: "{{ groups['kafka'].index(inventory_hostname) + 1 }}"
+
+    - name: Build kafka_controller_quorum_voters dynamically
+      set_fact:
+        kafka_controller_quorum_voters: "{{ groups['kafka'] | sort | map('extract', hostvars, 'private_ip') | list | zip(range(1, groups['kafka']|length + 1)) | map('join', '@') | map('regex_replace', '(.*)@(.*)', '\\2:9093,\\1') | list | join(',') | regex_replace(',$', '') }}"
+      run_once: true
+      delegate_to: localhost
+      delegate_facts: true
+
   roles:
     - install_kafka
 
 - name: Generate Prometheus targets for Kafka exporters
   hosts: localhost
   connection: local
-  gather_facts: false
   vars_files:
     - vars
+  gather_facts: false
   tasks:
     - name: Ensure Prometheus target directory exists
       file:

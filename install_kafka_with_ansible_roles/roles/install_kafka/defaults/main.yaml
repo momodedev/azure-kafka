@@ -13,8 +13,8 @@ kafka_log_dirs: "/kafka-data"
 kafka_data_dir: "/kafka-data"
 kafka_workspace: "/opt/kafka"
 
-# Controller Quorum
-kafka_controller_quorum_voters: "1@172.16.1.4:9093,2@172.16.1.5:9093,3@172.16.1.6:9093"
+# Controller Quorum (dynamically generated in tasks, not hardcoded)
+# kafka_controller_quorum_voters will be set at runtime from inventory
 
 # Replication
 kafka_offsets_topic_replication_factor: 3
