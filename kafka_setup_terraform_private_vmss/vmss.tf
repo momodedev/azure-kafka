@@ -88,7 +88,8 @@ resource "azapi_resource_action" "attach_data_disk" {
   action      = "attachDetachDataDisks"
   method      = "POST"
 
-  body = jsonencode({
+  # Fix: Use HCL object directly instead of jsonencode
+  body = {
     dataDisksToAttach = [
       {
         diskId  = azapi_resource.kafka_data_disk[count.index].id
@@ -97,7 +98,7 @@ resource "azapi_resource_action" "attach_data_disk" {
       }
     ]
     dataDisksToDetach = []
-  })
+  }
 
   depends_on = [azapi_resource.kafka_data_disk, azurerm_linux_virtual_machine_scale_set.brokers]
 }
