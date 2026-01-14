@@ -13,6 +13,20 @@
       vars:
         ansible_connection: local
 
+- name: Generate Kafka Controller Quorum Voters (run once on localhost)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Build kafka_controller_quorum_voters dynamically
+      set_fact:
+        kafka_controller_quorum_voters: "{{ groups['kafka'] | sort | map('extract', hostvars, 'private_ip') | list | zip(range(1, groups['kafka']|length + 1)) | map('join', '@') | map('regex_replace', '(.*)@(.*)', '\\2:9093,\\1') | list | join(',') | regex_replace(',$', '') }}"
+      register: quorum_result
+
+    - name: Display computed quorum voters
+      debug:
+        msg: "kafka_controller_quorum_voters = {{ kafka_controller_quorum_voters }}"
+
 - name: Prepare broker environment
   hosts: kafka
   become: true
@@ -31,12 +45,9 @@
       set_fact:
         kafka_node_id: "{{ groups['kafka'].index(inventory_hostname) + 1 }}"
 
-    - name: Build kafka_controller_quorum_voters dynamically
+    - name: Retrieve kafka_controller_quorum_voters from localhost facts
       set_fact:
-        kafka_controller_quorum_voters: "{{ groups['kafka'] | sort | map('extract', hostvars, 'private_ip') | list | zip(range(1, groups['kafka']|length + 1)) | map('join', '@') | map('regex_replace', '(.*)@(.*)', '\\2:9093,\\1') | list | join(',') | regex_replace(',$', '') }}"
-      run_once: true
-      delegate_to: localhost
-      delegate_facts: true
+        kafka_controller_quorum_voters: "{{ hostvars['localhost']['kafka_controller_quorum_voters'] }}"
 
   roles:
     - install_kafka
