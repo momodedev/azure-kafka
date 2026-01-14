@@ -17,11 +17,23 @@
   hosts: localhost
   connection: local
   gather_facts: false
+  vars_files:
+    - vars
   tasks:
-    - name: Build kafka_controller_quorum_voters dynamically (with private IPs)
+    - name: Init voters list
       set_fact:
-        kafka_controller_quorum_voters: "{{ (groups['kafka'] | sort | map('extract', hostvars, 'private_ip') | zip(range(1, groups['kafka']|length + 1)) | map('reverse') | map('join', '@') | map('regex_replace', '(.*)', '\\1:9093') | join(',')) }}"
-      register: quorum_result
+        voters_list: []
+
+    - name: Build voters list with id@ip:port
+      set_fact:
+        voters_list: "{{ voters_list + [ '%s@%s:%s' | format(idx + 1, hostvars[item]['private_ip'] | default(hostvars[item]['ansible_host']), kafka_controller_port | default(9093)) ] }}"
+      loop: "{{ groups['kafka'] | sort }}"
+      loop_control:
+        index_var: idx
+
+    - name: Finalize kafka_controller_quorum_voters
+      set_fact:
+        kafka_controller_quorum_voters: "{{ voters_list | join(',') }}"
 
     - name: Display computed quorum voters
       debug:
