@@ -125,22 +125,3 @@ resource "null_resource" "launch_ansible_playbook" {
 
   depends_on = [data.azurerm_virtual_machine_scale_set.brokers]
 }
-
-output "kafka_private_ips" {
-  description = "Private IP addresses assigned to Kafka brokers."
-  value       = data.azurerm_virtual_machine_scale_set.brokers.instances.*.private_ip_address
-}
-
-
-resource "null_resource" "launch_ansible_playbook" {
-  triggers = {
-    private_ips = join(",", data.azurerm_virtual_machine_scale_set.brokers.instances.*.private_ip_address)
-  }
-
-  provisioner "local-exec" {
-    working_dir = "../install_kafka_with_ansible_roles"
-    command      = "az login --identity >/dev/null && mkdir -p generated && ./inventory_script_hosts.sh ${azurerm_resource_group.example.name} ${azurerm_linux_virtual_machine_scale_set.brokers.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
-  }
-
-  depends_on = [data.azurerm_virtual_machine_scale_set.brokers]
-}
