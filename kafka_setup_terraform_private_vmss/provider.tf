@@ -8,7 +8,11 @@ terraform {
   }
 }
 
-provider "azapi" {}
+provider "azapi" {
+  use_msi = true
+  subscription_id = var.ARM_SUBSCRIPTION_ID
+}
+
 # Configure the Microsoft Azure Provider
 provider "azurerm" {
   features {}
