@@ -37,6 +37,9 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
     storage_account_type = "Premium_LRS"
   }
 
+  # Premium SSD v2 data disks are attached separately via azapi_resource
+  # due to Terraform/AzureRM provider limitations for IOPS/throughput configuration
+
   network_interface {
     name                      = "kafka-prod-nic"
     primary                   = true
@@ -54,51 +57,54 @@ resource "azurerm_linux_virtual_machine_scale_set" "brokers" {
   }
 }
 
-# Create managed disks for each instance
-resource "azurerm_managed_disk" "kafka_data_disk" {
-  count               = var.kafka_instance_count
-  name                = "kafka-data-disk-${count.index}"
-  location            = azurerm_resource_group.example.location
-  resource_group_name = azurerm_resource_group.example.name
-  storage_account_type = "PremiumV2_LRS"
-  disk_size_gb        = var.kafka_data_disk_size_gb
-  
-  disk_iops_read_write = var.kafka_data_disk_iops
-  disk_mbps_read_write = var.kafka_data_disk_throughput_mbps
-  
-  create_option = "Empty"
+# Premium SSD v2 Data Disk with configurable IOPS/Throughput
+resource "azapi_resource" "kafka_data_disk" {
+  count     = var.kafka_instance_count
+  type      = "Microsoft.Compute/disks@2024-03-02"
+  name      = "kafka-data-disk-${count.index}"
+  location  = azurerm_resource_group.example.location
+  parent_id = azurerm_resource_group.example.id
 
-  tags = {
-    Environment = "kafka"
+  body = {
+    sku = {
+      name = "PremiumV2_LRS"
+    }
+    properties = {
+      diskSizeGB = var.kafka_data_disk_size_gb
+      diskIOPSReadWrite = var.kafka_data_disk_iops
+      diskMBpsReadWrite = var.kafka_data_disk_throughput_mbps
+      creationData = {
+        createOption = "Empty"
+      }
+    }
   }
 }
 
-# Attach managed disks to VMSS instances using custom script
-resource "null_resource" "attach_disks" {
-  count = var.kafka_instance_count
+# Attach Premium SSD v2 disk to each VMSS instance
+resource "azapi_resource" "disk_attachment" {
+  count     = var.kafka_instance_count
+  type      = "Microsoft.Compute/virtualMachineScaleSets/virtualMachines/dataDisks@2024-03-01"
+  name      = "kafka-data-disk-${count.index}"
+  parent_id = "${azurerm_linux_virtual_machine_scale_set.brokers.id}/virtualMachines/${count.index}"
 
-  triggers = {
-    disk_id = azurerm_managed_disk.kafka_data_disk[count.index].id
-    instance_index = count.index
+  body = {
+    properties = {
+      lun = 0
+      createOption = "Attach"
+      managedDisk = {
+        id = azapi_resource.kafka_data_disk[count.index].id
+      }
+      caching = "None"
+    }
   }
 
-  provisioner "local-exec" {
-    command = <<-EOT
-      az vmss disk attach \
-        --resource-group ${azurerm_resource_group.example.name} \
-        --vmss-name ${azurerm_linux_virtual_machine_scale_set.brokers.name} \
-        --instance-id ${count.index} \
-        --disk ${azurerm_managed_disk.kafka_data_disk[count.index].id}
-    EOT
-  }
-
-  depends_on = [azurerm_linux_virtual_machine_scale_set.brokers, azurerm_managed_disk.kafka_data_disk]
+  depends_on = [azapi_resource.kafka_data_disk]
 }
 
 data "azurerm_virtual_machine_scale_set" "brokers" {
   name                = azurerm_linux_virtual_machine_scale_set.brokers.name
   resource_group_name = azurerm_resource_group.example.name
-  depends_on          = [null_resource.attach_disks]
+  depends_on          = [azapi_resource.disk_attachment]
 }
 
 
@@ -117,6 +123,4 @@ resource "null_resource" "launch_ansible_playbook" {
     working_dir = "../install_kafka_with_ansible_roles"
     command      = "az login --identity >/dev/null && mkdir -p generated && ./inventory_script_hosts.sh ${azurerm_resource_group.example.name} ${azurerm_linux_virtual_machine_scale_set.brokers.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
   }
-
-  depends_on = [data.azurerm_virtual_machine_scale_set.brokers]
 }
