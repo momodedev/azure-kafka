@@ -3,7 +3,7 @@
 
 # KRaft Configuration
 kafka_process_roles: "broker,controller"
-kafka_node_id: 1  # Will be overridden by playbook
+kafka_node_id: 1
 kafka_controller_port: 9093
 kafka_client_port: 9092
 kafka_external_port: 9094
@@ -34,61 +34,3 @@ kafka_socket_request_max_bytes: 104857600
 kafka_log_retention_hours: 168
 kafka_log_segment_bytes: 1073741824
 kafka_log_retention_check_interval_ms: 300000
-
-# --- Grafana Setup ---
-
-- name: Install dependencies (Debian)
-  ansible.builtin.apt:
-    name:
-      - apt-transport-https
-      - software-properties-common
-      - wget
-    state: present
-    update_cache: true
-  when: ansible_os_family == "Debian"
-
-- name: Add Grafana GPG key (Debian)
-  ansible.builtin.get_url:
-    url: https://apt.grafana.com/gpg.key
-    dest: /usr/share/keyrings/grafana.key
-    mode: '0644'
-  when: ansible_os_family == "Debian"
-
-- name: Add Grafana repo (Debian)
-  ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
-    state: present
-    filename: grafana
-  when: ansible_os_family == "Debian"
-
-- name: Install Grafana (Debian)
-  ansible.builtin.apt:
-    name: grafana
-    state: present
-    update_cache: true
-  when: ansible_os_family == "Debian"
-
-- name: Configure Grafana yum repo (RedHat)
-  ansible.builtin.copy:
-    dest: /etc/yum.repos.d/grafana.repo
-    mode: "0644"
-    content: |
-      [grafana]
-      name=grafana
-      baseurl=https://packages.grafana.com/oss/rpm
-      repo_gpgcheck=1
-      enabled=1
-      gpgcheck=1
-      gpgkey=https://packages.grafana.com/gpg.key
-      exclude=gf-enterprise*
-  when: ansible_os_family == "RedHat"
-
-- name: Install Grafana (RedHat)
-  ansible.builtin.dnf:
-    name: grafana
-    state: present
-    update_cache: true
-    disable_gpg_check: false
-  when: ansible_os_family == "RedHat"
-
-- name: Provision Grafana Prometheus datasource
