@@ -28,8 +28,8 @@ resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
   size                = var.kafka_vm_size
-  # Add zone assignment for Premium SSD v2 support
-  zone                = tostring((count.index % 3) + 1)  # Distributes: 1,2,3,1,2
+  # Deploy ALL VMs in Zone 1 to avoid capacity issues and disk alignment errors
+  zone                = "1"
   network_interface_ids = [
     azurerm_network_interface.kafka_brokers[count.index].id
   ]
@@ -81,8 +81,8 @@ resource "azapi_resource" "kafka_data_disk" {
     sku = {
       name = "PremiumV2_LRS"
     }
-    # Add zones array for Premium SSD v2
-    zones = [tostring((count.index % 3) + 1)]  # Must match VM zone
+    # All disks in Zone 1 to match VMs
+    zones = ["1"]
     properties = {
       diskSizeGB           = var.kafka_data_disk_size_gb
       diskIOPSReadWrite    = var.kafka_data_disk_iops
