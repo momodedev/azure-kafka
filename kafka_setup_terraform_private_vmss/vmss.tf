@@ -108,7 +108,7 @@ resource "null_resource" "launch_ansible_playbook" {
 
   provisioner "local-exec" {
     working_dir = "/home/azureadmin/azure-kafka/install_kafka_with_ansible_roles"
-    command     = "az login --identity >/dev/null && mkdir -p generated && bash ./inventory_script_hosts_vms.sh ${azurerm_resource_group.example.name} ${var.kafka_admin_username} > generated/kafka_hosts && cat generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
+    command     = "source /home/azureadmin/ansible-venv/bin/activate && az login --identity >/dev/null && mkdir -p generated && bash ./inventory_script_hosts_vms.sh ${azurerm_resource_group.example.name} ${var.kafka_admin_username} > generated/kafka_hosts && cat generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
   }
 
   depends_on = [
