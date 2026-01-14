@@ -89,7 +89,7 @@ resource "azapi_resource" "disk_attachment" {
 
   body = {
     properties = {
-      lun = 0
+      lun         = 0
       createOption = "Attach"
       managedDisk = {
         id = azapi_resource.kafka_data_disk[count.index].id
@@ -97,6 +97,8 @@ resource "azapi_resource" "disk_attachment" {
       caching = "None"
     }
   }
+
+  schema_validation_enabled = false
 
   depends_on = [azapi_resource.kafka_data_disk]
 }
