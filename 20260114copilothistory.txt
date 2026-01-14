@@ -1,0 +1,550 @@
+================================================================================
+GITHUB COPILOT CHAT HISTORY EXPORT
+Date: January 14, 2026
+Session: Kafka Infrastructure Deployment on Azure with Monitoring
+================================================================================
+
+CONVERSATION OVERVIEW
+================================================================================
+
+Primary Objectives:
+- "See how to resolve the deployed Grafana and Prometheus that cannot be accessed in browsers"
+- "Make the code work well for Ubuntu 22.04 Control Node"
+- "Optimize kafka_controller_quorum_voters by removing hardcoding and making it dynamic"
+- "How to resolve the UnknownHostException in Kafka Raft peer connectivity"
+
+Session Context:
+Multi-phase infrastructure deployment for a production Kafka cluster on Azure with monitoring. Started with networking issues (Grafana/Prometheus inaccessible), progressed through OS compatibility fixes, monitoring stack deployment, and finally Kafka configuration issues. Conversation evolved from infrastructure problems to deep Ansible/Terraform optimization and Kafka KRaft mode configuration.
+
+User Intent Evolution:
+1. Initial: Troubleshoot monitoring access (infrastructure layer)
+2. Middle: Ensure cross-OS compatibility and automate deployments (IaC layer)
+3. Current: Fix Kafka configuration and make quorum voters dynamic (application layer)
+
+
+TECHNICAL FOUNDATION
+================================================================================
+
+Kafka 3.9.1 (KRaft Mode):
+- Self-managed quorum without ZooKeeper
+- Three-broker cluster with colocated controllers and brokers
+- Node IDs: 1, 2, 3 (deterministic, index-based from sorted inventory)
+- Listener ports: 9093 (controller), 9092 (internal broker), 9094 (external)
+- Log directory: /opt/kafka/data (must match created directory exactly)
+
+Azure Infrastructure:
+- Control Node: Ubuntu 22.04, public IP with NSG rules for ports 22/3000/9090
+- Kafka VMSS: 3 private instances (172.16.1.4, 172.16.1.5, 172.16.1.6) with Rocky Linux
+- VNet peering between Control Node and Kafka VNets
+- NAT gateway for outbound egress from Kafka brokers
+
+Monitoring Stack:
+- Prometheus: Port 9090, scrapes Kafka brokers and node exporters
+- Grafana: Port 3000, displays dashboards with Kafka and node metrics
+- Kafka Exporter: Runs on control node, exports broker metrics to Prometheus
+- Node Exporter: Installed on all 3 Kafka brokers, exposes system metrics
+
+Terraform → Ansible Flow:
+- Local Terraform (Control Node) → Remote shell script → Remote Terraform (Kafka VMSS) → Ansible playbooks
+- Dynamic inventory: inventory_script_hosts.sh generates /generated/kafka_hosts with broker IPs and private_ip variable
+- Monitoring playbook runs automatically after Kafka deployment via chained command
+
+
+CODEBASE STATUS
+================================================================================
+
+install_kafka_with_ansible_roles/deploy_kafka_playbook.yaml:
+Purpose: Main Kafka deployment orchestration with 4 plays
+Current State: Fixed with dynamic quorum voters generation
+Key Code Segments:
+  # Play 1: Generate Kafka Controller Quorum Voters on localhost
+  - name: Build voters list with id@ip:port
+    set_fact:
+      voters_list: "{{ voters_list + [ '%s@%s:%s' | format(idx + 1, hostvars[item]['private_ip'] | default(hostvars[item]['ansible_host']), kafka_controller_port | default(9093)) ] }}"
+    loop: "{{ groups['kafka'] | sort }}"
+  
+  # Play 3: Retrieve quorum on each broker before role execution
+  - name: Retrieve kafka_controller_quorum_voters from localhost facts
+    set_fact:
+      kafka_controller_quorum_voters: "{{ hostvars['localhost']['kafka_controller_quorum_voters'] }}"
+
+Dependencies: Requires vars file with kafka_controller_port = 9093
+Status: PENDING FIX - Current version generates malformed id@ip:port:port (double ports)
+
+install_kafka_with_ansible_roles/roles/install_kafka/defaults/main.yaml:
+Purpose: Default variables for Kafka installation role
+Current State: Cleaned up (removed task code, removed hardcoded quorum)
+Key Variables:
+  kafka_log_dirs: "/opt/kafka/data"  # Must match directory created by setup_environment
+  kafka_controller_port: 9093
+  kafka_client_port: 9092
+  kafka_external_port: 9094
+
+Dependencies: None (variables only)
+Status: CORRECT
+
+setup_control_node_terraform/main.tf:
+Purpose: Control Node infrastructure provisioning
+Current State: NSG rules added for all required ports
+Key Code Segments:
+  security_rule {
+    name = "prometheus"
+    destination_port_range = "9090"
+  }
+  security_rule {
+    name = "grafana"
+    destination_port_range = "3000"
+  }
+
+Dependencies: Azure provider, resource group
+Status: CORRECT
+
+setup_control_node_terraform/private_vmss_init.sh:
+Purpose: Initialize Control Node with dependencies (Terraform, Ansible, Azure CLI)
+Current State: Fixed with UFW disable for Ubuntu
+Key Code: sudo ufw disable (disables OS firewall)
+Dependencies: Runs at VM startup via provisioner
+Status: CORRECT
+
+install_kafka_with_ansible_roles/roles/monitoring/tasks/main.yaml:
+Purpose: Install Prometheus, Grafana, Kafka Exporter, Node Exporter
+Current State: OS-family conditionals added (supports both Debian and RedHat)
+Key Segments:
+  - name: Copy Grafana dashboard JSONs
+    ansible.builtin.copy:
+      src: "{{ role_path }}/templates/dashboards/{{ item }}"
+      dest: "/etc/grafana/provisioning/dashboards/ansible/{{ item }}"
+    loop:
+      - kafka_cluster_dashboard.json
+      - node_exporter_dashboard.json
+
+Dependencies: Role path, template directory structure
+Status: CORRECT
+
+
+PROBLEM RESOLUTION
+================================================================================
+
+Issues Encountered:
+
+1. Grafana/Prometheus Unreachable (RESOLVED)
+   Root cause: Missing NSG rules, UFW enabled on Ubuntu
+   Solution: Added NSG rules for ports 3000/9090, disabled UFW
+   Status: COMPLETE - Monitoring stack now accessible
+
+2. Monitoring Playbook Failures (RESOLVED)
+   Root causes: Missing role path, OS-family conditionals, remote_src flag
+   Solutions: Fixed dashboard copy path, added Debian/RedHat conditionals, added remote_src: true
+   Status: COMPLETE - Monitoring playbook runs successfully
+
+3. Hardcoded Quorum Voters (RESOLVED)
+   Root cause: kafka_controller_quorum_voters hardcoded to specific IPs
+   Solution: Generate dynamically from sorted inventory groups
+   Status: PARTIALLY FIXED - Generation logic exists but output format is malformed
+
+4. Kafka Service Crashes (ACTIVE ISSUE)
+   Root cause: controller.quorum.voters contains double ports (e.g., 172.16.1.5:9093:9093)
+   Symptom: java.net.UnknownHostException: 172.16.1.5:9093: invalid IPv6 address literal
+   Kafka tries to parse ip:port as IPv6 literal, then adds another :port
+   Solution provided: Use indexed loop with %s@%s:%s format string in deploy_kafka_playbook.yaml
+   Status: NEEDS DEPLOYMENT
+
+Lessons Learned:
+- Azure NSG rules must be explicit (default-deny)
+- Ubuntu UFW can override Azure NSG rules at OS level
+- Jinja2 format strings must be tested for idempotency
+- Dynamic inventory requires careful variable propagation via hostvars
+- Kafka KRaft requires precise quorum voter format: id@ip:port (not ip@id:port or double ports)
+
+
+PROGRESS TRACKING
+================================================================================
+
+Completed Tasks:
+✓ Azure infrastructure with NSG rules (ports 22, 3000, 9090)
+✓ Control Node firewall configuration (UFW disabled)
+✓ Monitoring stack deployment (Prometheus, Grafana, exporters all running)
+✓ OS-family conditional support in roles (Debian + RedHat)
+✓ Dynamic quorum voters generation logic (partially - format needs fixing)
+✓ Kafka storage configuration (kafka_log_dirs aligned)
+
+Partially Complete Work:
+⚠ Kafka broker configuration - Service installed but fails to start due to malformed quorum voters
+⚠ Quorum voters generation - Logic correct but outputting id@ip:port:port instead of id@ip:port
+
+Validated Outcomes:
+✓ Monitoring services confirmed running via systemctl status
+✓ Grafana accessible at http://<control_ip>:3000
+✓ Prometheus accessible at http://<control_ip>:9090
+✓ Dashboard JSON files deployed and provisioned
+✓ Kafka configuration files created (but service crashes on startup)
+
+
+ACTIVE WORK STATE
+================================================================================
+
+Current Focus:
+Fixing Kafka KRaft quorum voters format from malformed 1@172.16.1.4:9093:9093 to correct 1@172.16.1.4:9093
+
+Recent Context:
+User provided broker logs showing persistent UnknownHostException errors when Kafka tries to resolve Raft peers. The config file shows double ports in controller.quorum.voters. Root cause identified: previous Jinja2 filter logic was adding port twice. Provided corrected indexed loop approach using %s@%s:%s format string.
+
+Working Code (Provided):
+```yaml
+- name: Build voters list with id@ip:port
+  set_fact:
+    voters_list: "{{ voters_list + [ '%s@%s:%s' | format(idx + 1, hostvars[item]['private_ip'] | default(hostvars[item]['ansible_host']), kafka_controller_port | default(9093)) ] }}"
+  loop: "{{ groups['kafka'] | sort }}"
+  loop_control:
+    index_var: idx
+
+- name: Finalize kafka_controller_quorum_voters
+  set_fact:
+    kafka_controller_quorum_voters: "{{ voters_list | join(',') }}"
+```
+
+Immediate Context (Pre-Export):
+- Broker logs showed Kafka crashed attempting to connect to peers with format 172.16.1.5:9093:9093
+- User verified config file has double ports
+- Verified no listeners bound (ports 9090-9094 all empty)
+- Confirmed other config (listeners, advertised.listeners, log.dirs) is correct
+
+
+RECENT OPERATIONS
+================================================================================
+
+Last Agent Commands Executed:
+1. read_file - Retrieved monitoring role tasks to diagnose dashboard copy issue
+2. replace_string_in_file - Updated dashboard copy task 5 times to fix path and remote_src
+3. read_file - Retrieved deploy_kafka_playbook.yaml to diagnose quorum voters issue
+4. replace_string_in_file - Updated playbook with localhost quorum generation play
+5. All changes committed and pushed to GitHub origin/main
+
+Tool Results Summary:
+- File edits successful for all monitoring role tasks, Kafka defaults, and playbook modifications
+- Terraform applied successfully (NSG rules added, Control Node provisioned)
+- Ansible playbooks for monitoring completed with all services running
+- Current blocker: Kafka startup still fails due to quorum voter format (known fix not yet applied)
+
+Pre-Export State:
+User had just provided broker logs confirming the double-port format issue in controller.quorum.voters. Analyzed the root cause and provided the corrected Ansible code using indexed loop with %s@%s:%s format. System was waiting for the user to apply this fix.
+
+
+CONTINUATION PLAN
+================================================================================
+
+Pending Task 1: Apply Quorum Voters Format Fix
+- Update install_kafka_with_ansible_roles/deploy_kafka_playbook.yaml with indexed loop format
+- Commit and push: git add deploy_kafka_playbook.yaml && git commit -m "Fix: Use indexed loop for clean id@ip:port format" && git push origin main
+- Re-run Terraform: cd setup_control_node_terraform && terraform apply -var-file='secret.tfvars'
+- Expected: Kafka brokers start with correct quorum voters format
+
+Pending Task 2: Verify Kafka Cluster Health
+- On Control Node: Check Kafka service status
+  sudo systemctl status kafka
+  sudo ss -tulpn | grep 909  # Should show 9092, 9093, 9094 LISTEN
+- Wait ~30s for KRaft quorum election to complete
+- Verify: kafka-metadata-quorum.sh --bootstrap-server localhost:9092 describe --status
+
+Pending Task 3: Verify Monitoring Integration
+- Check Prometheus targets: http://<control_ip>:9090/targets
+  - Should show kafka-exporter and node-exporter targets as UP
+- Check Grafana dashboards: http://<control_ip>:3000 (login admin/admin)
+  - Should show Kafka Cluster and Node Exporter dashboards with data
+
+Pending Task 4: Verify Topic ISR Completeness
+- Create test topic on broker: kafka-topics.sh --create --topic test --replication-factor 3
+- Check ISR: kafka-topics.sh --describe --topic test
+- Expected: All replicas and ISR should match (e.g., Replicas: 1,2,3  Isr: 1,2,3)
+
+Priority Information:
+- Most urgent: Fix quorum voters format (blocks Kafka startup)
+- Next: Run monitoring playbook automatically (setup already in place)
+- Then: Validate cluster health and topic replication
+- Finally: Document final status and confirm all ISR replicas are in-sync
+
+Next Action:
+"After you apply the corrected deploy_kafka_playbook.yaml with the indexed loop format and re-run terraform apply, SSH into a broker and verify that controller.quorum.voters in /opt/kafka/config/server.properties now shows the correct format: 1@172.16.1.4:9093,2@172.16.1.5:9093,3@172.16.1.6:9093 (single port per entry). Then restart Kafka with sudo systemctl restart kafka and confirm it binds to all listener ports with sudo ss -tulpn | grep 909."
+
+
+DETAILED PHASE BREAKDOWN
+================================================================================
+
+PHASE 1: Problem Identification (Initial Context)
+- User reported Grafana (port 3000) and Prometheus (port 9090) cannot be accessed in browsers after deployment
+- Screenshots showed "connection refused" errors from the Control Node public IP
+
+PHASE 2: Infrastructure Analysis & NSG Configuration
+- Identified missing Azure Network Security Group (NSG) rules for ports 3000/9090
+- Identified Ubuntu 22.04 Control Node had incorrect firewall settings
+- Fixed setup_control_node_terraform/main.tf to include NSG rules for ports 22, 9090, 3000
+- Modified setup_control_node_terraform/private_vmss_init.sh to disable UFW on Ubuntu
+
+PHASE 3: Monitoring Stack Deployment Issues
+- First monitoring playbook run failed: Ansible role path issues and OS-family conditionals missing
+- Fixed install_kafka_with_ansible_roles/roles/monitoring/tasks/main.yaml to support both Debian and RedHat
+- Fixed dashboard copy task to use correct path: templates/dashboards/ with remote_src: true
+- Fixed node_exporter installation to use remote_src: true in copy task
+- Successfully deployed Prometheus, Grafana, Kafka Exporter, and Node Exporter
+
+PHASE 4: Kafka Configuration - Dynamic Quorum Voters
+- Removed hardcoded kafka_controller_quorum_voters from defaults
+- Initially attempted complex Jinja2 filters that produced malformed output (reversed format)
+- Fixed format generation multiple times, eventually settling on clean id@ip:port format
+- Generated quorum voters on localhost and propagated to all brokers via hostvars
+
+PHASE 5: Kafka Startup Issues
+- Kafka service started but failed to bind to client listener (port 9092)
+- Root cause: controller.quorum_voters contained malformed addresses like 172.16.1.5:9093:9093 (double ports)
+- This caused UnknownHostException: invalid IPv6 address literal when Kafka tried to parse Raft peers
+- Last operation: Provided corrected Jinja2 format using indexed loop with %s@%s:%s format string
+
+
+KEY FILES MODIFIED
+================================================================================
+
+1. setup_control_node_terraform/main.tf
+   - Added/confirmed NSG rules for ports 22, 9090, 3000
+   - Security rule priorities: 100 (SSH), 110 (Prometheus), 120 (Grafana)
+
+2. setup_control_node_terraform/private_vmss_init.sh
+   - Added sudo ufw disable to disable Ubuntu firewall
+   - Installs Terraform, Ansible, Azure CLI, Python venv
+
+3. install_kafka_with_ansible_roles/roles/monitoring/tasks/main.yaml
+   - Added OS-family conditionals (when: ansible_os_family == "Debian" / == "RedHat")
+   - Fixed dashboard copy to use indexed loop with {{ role_path }}/templates/dashboards/{{ item }}
+   - Supports both Debian/Ubuntu (apt) and RedHat/Rocky (yum)
+
+4. install_kafka_with_ansible_roles/monitoring/roles/node_exporter/tasks/main.yaml
+   - Added remote_src: true to copy task for binary installation
+
+5. install_kafka_with_ansible_roles/roles/install_kafka/defaults/main.yaml
+   - Removed hardcoded kafka_controller_quorum_voters
+   - Set kafka_log_dirs: /opt/kafka/data (matches created directory)
+
+6. install_kafka_with_ansible_roles/deploy_kafka_playbook.yaml
+   - Added Generate Kafka Controller Quorum Voters play running on localhost
+   - Builds dynamic voters_list with correct id@ip:port format
+   - Propagates to brokers via hostvars['localhost']['kafka_controller_quorum_voters']
+   - Removed node_exporter role from main Kafka playbook (only in monitoring playbook)
+
+7. kafka_setup_terraform_private_vmss/vmss.tf
+   - Updated provisioner command to run monitoring playbook after Kafka
+   - Command chains: inventory_script_hosts.sh → deploy_kafka_playbook.yaml → monitoring/deploy_monitoring_playbook.yml
+
+
+CRITICAL CONFIGURATION VALUES
+================================================================================
+
+Broker Node IDs: 1, 2, 3
+Broker Private IPs: 172.16.1.4, 172.16.1.5, 172.16.1.6
+Listener Ports:
+  - Controller (KRaft): 9093
+  - Internal (Broker-to-Broker): 9092
+  - External (Client): 9094
+
+Kafka Config Properties:
+  controller.quorum.voters: Should be "1@172.16.1.4:9093,2@172.16.1.5:9093,3@172.16.1.6:9093"
+  listeners: CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
+  advertised.listeners: INTERNAL://172.16.1.X:9092,EXTERNAL://172.16.1.X:9094 (where X matches broker IP)
+  log.dirs: /opt/kafka/data
+
+Monitoring Ports:
+  Prometheus: 9090
+  Grafana: 3000
+  Kafka Exporter Metrics: 9091 (on control node)
+
+Azure NSG Rules (Control Node):
+  Port 22 (SSH): Priority 100
+  Port 9090 (Prometheus): Priority 110
+  Port 3000 (Grafana): Priority 120
+
+
+ERROR DIAGNOSIS REFERENCE
+================================================================================
+
+Symptom: java.net.UnknownHostException: 172.16.1.5:9093: invalid IPv6 address literal
+- Root Cause: controller.quorum.voters formatted as "1@172.16.1.4:9093:9093" (double port)
+- Why It Happens: Jinja2 filter was appending port twice, or format string was wrong
+- Fix: Use indexed loop with %s@%s:%s format to generate clean id@ip:port format
+- Verification: grep controller.quorum.voters /opt/kafka/config/server.properties
+
+Symptom: Cannot access Grafana at http://<control_ip>:3000
+- Root Cause: NSG rules missing or UFW enabled on Ubuntu
+- Fix: Add NSG rules for port 3000, disable UFW with sudo ufw disable
+
+Symptom: Kafka service shows "active (running)" but crashes within seconds
+- Root Cause: Configuration error causing immediate exit (like malformed quorum voters)
+- Debug: Check sudo journalctl -u kafka -n 100 --no-pager for specific Java exceptions
+
+Symptom: Kafka listeners not binding to any ports
+- Root Cause: Service crashes before binding (related to malformed config)
+- Debug: Use sudo ss -tulpn | grep 909 to verify no LISTEN state
+- Verify: Check systemctl status kafka and systemd logs
+
+
+WORKSPACE STRUCTURE
+================================================================================
+
+azure-kafka/
+├── README.md
+├── install_kafka_with_ansible_roles/
+│   ├── ansible.cfg
+│   ├── bmyhosts
+│   ├── deploy_kafka_playbook.yaml
+│   ├── deploy_monitoring_playbook.yaml
+│   ├── dynamic_inventory_azure_rm.yml
+│   ├── inventory_script_hosts.sh
+│   ├── vars/
+│   ├── generated/
+│   │   └── kafka_hosts
+│   ├── monitoring/
+│   │   ├── deploy_monitoring_playbook.yml
+│   │   ├── inventory.ini
+│   │   └── roles/
+│   │       ├── kafka_exporter/
+│   │       ├── node_exporter/
+│   │       └── prometheus_grafana/
+│   └── roles/
+│       ├── install_kafka/
+│       ├── monitoring/
+│       └── setup_envirenment/
+├── kafka_setup_terraform/
+│   ├── monitor.tf
+│   ├── provider.tf
+│   ├── terraform.tfstate
+│   ├── terraform.tfstate.backup
+│   ├── variables.tf
+│   ├── vmss.tf
+│   └── vnet.tf
+├── kafka_setup_terraform_private_vmss/
+│   ├── provider.tf
+│   ├── variables.tf
+│   ├── vmss.tf
+│   └── vnet.tf
+├── setenv/
+│   └── setv.sh
+└── setup_control_node_terraform/
+    ├── keyvault.tf
+    ├── main.tf
+    ├── private_vmss_deploy.sh
+    ├── private_vmss_init.sh
+    ├── provider.tf
+    ├── secret.tfvars
+    ├── terraform.tfstate
+    ├── terraform.tfstate.backup
+    └── variables.tf
+
+
+DEPLOYMENT WORKFLOW
+================================================================================
+
+Step 1: Provision Control Node
+  cd setup_control_node_terraform
+  terraform init
+  terraform plan -var-file='secret.tfvars'
+  terraform apply -var-file='secret.tfvars'
+
+Step 2: Provision Kafka Brokers (VMSS)
+  cd kafka_setup_terraform_private_vmss
+  terraform init
+  terraform plan
+  terraform apply
+  → This automatically runs ansible playbooks via provisioner
+
+Step 3: Verify Kafka Cluster
+  - SSH to Control Node
+  - Check kafka service: sudo systemctl status kafka
+  - Verify quorum: sudo ss -tulpn | grep 909
+  - Check logs: sudo journalctl -u kafka -n 100 --no-pager
+
+Step 4: Verify Monitoring
+  - Access Grafana: http://<control_ip>:3000 (admin/admin)
+  - Access Prometheus: http://<control_ip>:9090
+  - Check targets: http://<control_ip>:9090/targets
+
+
+NOTES FOR FUTURE REFERENCE
+================================================================================
+
+1. Dynamic Inventory Generation:
+   - inventory_script_hosts.sh generates kafka_hosts file
+   - Contains hostname and private_ip variable for each broker
+   - Used by both Kafka and monitoring playbooks
+
+2. Variable Propagation:
+   - Control Node facts set on localhost during first play
+   - Brokers retrieve facts via hostvars['localhost']['variable_name'] in subsequent plays
+   - Critical for passing dynamically generated values (like quorum voters)
+
+3. Role Path References:
+   - {{ role_path }} resolves to role directory (e.g., /root/.ansible/roles/monitoring)
+   - Used for relative template and file references
+   - Must use {{ role_path }} instead of hardcoded paths for portability
+
+4. OS-Family Conditionals:
+   - Ubuntu/Debian: ansible_os_family == "Debian"
+   - Rocky/CentOS: ansible_os_family == "RedHat"
+   - Always add both conditionals for cross-OS compatibility
+
+5. Kafka KRaft Quorum Voters Format:
+   - MUST be: id@ip:port (example: 1@172.16.1.4:9093)
+   - Single port per entry, no double ports
+   - All three entries joined by commas: 1@...,2@...,3@...
+   - Used in controller.quorum.voters property
+
+6. Terraform Provisioners:
+   - Run AFTER instance is created
+   - Use remote-exec for SSH commands
+   - Chain multiple commands with &&
+   - Always ensure provisioner runs all required playbooks in order
+
+7. Azure Networking:
+   - NSG rules apply at subnet level (default-deny)
+   - UFW/firewalld on instances can add additional restrictions
+   - Both layers must be configured for traffic to flow
+   - Test with curl from control node to broker private IPs
+
+
+CONTACT POINTS FOR CONTINUATION
+================================================================================
+
+If restarting work on this project:
+
+1. First Check: Kafka Quorum Voters Format
+   - SSH to broker: ssh -i <key> rockyadmin@172.16.1.4
+   - Check config: grep controller.quorum.voters /opt/kafka/config/server.properties
+   - Should show: 1@172.16.1.4:9093,2@172.16.1.5:9093,3@172.16.1.6:9093
+
+2. Kafka Service Status
+   - sudo systemctl status kafka
+   - sudo journalctl -u kafka -n 50 --no-pager (check for errors)
+   - sudo ss -tulpn | grep 909 (verify ports binding)
+
+3. Monitoring Stack Status
+   - Control Node: sudo systemctl status prometheus grafana-server kafka-exporter
+   - Browser: http://<control_ip>:3000 (Grafana)
+   - Browser: http://<control_ip>:9090 (Prometheus)
+
+4. Common Issues & Quick Fixes
+   - Can't access Grafana? Check NSG rules and UFW status
+   - Kafka won't start? Check quorum voters format and log.dirs directory
+   - Prometheus targets down? Check network connectivity between control and brokers
+   - Grafana dashboards empty? Wait 30s for metrics to populate, check targets first
+
+5. Required Files for Terraform Reapply
+   - setup_control_node_terraform/secret.tfvars (credentials)
+   - All .tf files (should be in git)
+   - All playbooks and roles (should be in git)
+
+6. Git Workflow
+   - All changes should be committed: git add . && git commit -m "message"
+   - Push to origin: git push origin main
+   - Verify: git log --oneline (check commits)
+   - Before re-running terraform: git pull to get latest changes
+
+================================================================================
+END OF CHAT HISTORY EXPORT
+Generated: January 14, 2026
+================================================================================
