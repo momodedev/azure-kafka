@@ -8,16 +8,16 @@ scrape_configs:
       - targets:
           - 'localhost:9090'
 
-  # Dynamic Kafka exporter discovery
   - job_name: 'kafka-exporter'
-    file_sd_configs:
-      - files:
-        - /etc/prometheus/file_sd/kafka_targets.json
-        refresh_interval: 30s
+    static_configs:
+      - targets:
+        {% for broker in groups.get('kafka_broker', []) %}
+          - '{{ hostvars[broker]["ansible_host"] }}:9308'
+        {% endfor %}
 
-  # Dynamic node exporter discovery
   - job_name: 'node-exporter'
-    file_sd_configs:
-      - files:
-        - /etc/prometheus/file_sd/node_targets.json
-        refresh_interval: 30s
+    static_configs:
+      - targets:
+        {% for broker in groups.get('kafka_broker', []) %}
+          - '{{ hostvars[broker]["ansible_host"] }}:9100'
+        {% endfor %}

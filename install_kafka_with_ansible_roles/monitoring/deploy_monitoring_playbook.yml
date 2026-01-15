@@ -30,6 +30,8 @@
     grafana_apt_key_url: "https://packages.grafana.com/gpg.key"
     node_exporter_version: "1.7.0"
     kafka_exporter_version: "1.7.0"
+    # Dynamically get all broker IPs from inventory
+    broker_ips: "{{ groups['kafka_broker'] | map('extract', hostvars, 'ansible_host') | list }}"
   roles:
     - role: prometheus_grafana
     - role: kafka_exporter
