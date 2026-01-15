@@ -1,0 +1,113 @@
+---
+- name: Install Python3 PyMySQL dependency for Ansible
+  ansible.builtin.dnf:
+    name: python3-PyMySQL
+    state: present
+
+- name: Install wget, epel-release and SELinux tools
+  ansible.builtin.dnf:
+    name:
+      - wget
+      - epel-release
+      - policycoreutils-python-utils
+    state: present
+
+- name: Download MySQL 5.7 repository RPM
+  ansible.builtin.get_url:
+    url: https://repo.mysql.com/mysql57-community-release-el7.rpm
+    dest: /tmp/mysql57-community-release-el7.rpm
+
+- name: Install MySQL repository from local RPM
+  ansible.builtin.dnf:
+    name: /tmp/mysql57-community-release-el7.rpm
+    state: present
+    disable_gpg_check: yes
+
+- name: Import GPG Key 2022
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+
+- name: Import GPG Key 2023
+  ansible.builtin.rpm_key:
+    state: present
+    key: https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+
+- name: Install MySQL Community Server
+  ansible.builtin.dnf:
+    name: mysql-community-server
+    state: present
+  ignore_errors: yes
+  register: install_result
+
+- name: Ensure parent directory /data exists
+  file:
+    path: /data
+    state: directory
+    mode: '0755'
+
+# ========================================================
+#  自定义数据目录逻辑
+# ========================================================
+
+- name: Create Custom Data Directory
+  file:
+    path: "{{ mysql_datadir }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: '0750'
+  # 即使安装报错，只要包存在就尝试配置目录
+  when: install_result is succeeded or install_result is failed
+
+- name: Configure SELinux for Custom Data Directory
+  community.general.sefcontext:
+    target: "{{ mysql_datadir }}(/.*)?"
+    setype: mysqld_db_t
+    state: present
+  ignore_errors: yes
+
+- name: Apply SELinux Context
+  command: restorecon -Rv "{{ mysql_datadir }}"
+  ignore_errors: yes
+
+- name: Update my.cnf datadir path
+  lineinfile:
+    path: /etc/my.cnf
+    regexp: '^datadir='
+    line: "datadir={{ mysql_datadir }}"
+    backup: yes
+  register: config_changed
+
+# 如果配置改了，尝试重启
+- name: Restart MySQL to apply config changes
+  service:
+    name: mysqld
+    state: restarted
+  when: config_changed.changed
+
+# ========================================================
+#  逻辑结束
+# ========================================================
+
+- name: Check if installation failed
+  debug:
+    msg: "MySQL installation likely failed due to EL7/EL9 incompatibility."
+  when: install_result is failed
+
+# 兜底启动
+- name: Ensure MySQL service is started
+  ansible.builtin.service:
+    name: mysqld
+    state: started
+    enabled: yes
+  ignore_errors: yes
+
+- name: Check process status
+  shell: ps -ef | grep mysql | grep -v grep
+  register: ps_output
+  ignore_errors: yes
+
+- name: Show process info
+  debug:
+    var: ps_output.stdout_lines

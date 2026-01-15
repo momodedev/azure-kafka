@@ -1,0 +1,131 @@
+---
+# ========================================================
+#  0. 定义变量 (Node Exporter 专用)
+# ========================================================
+- name: Set Node Exporter Variables
+  set_fact:
+    node_exporter_version: "1.8.1"
+    local_files_dir: "{{ playbook_dir }}/files"
+    node_tar_filename: "node_exporter-1.8.1.linux-amd64.tar.gz"
+    node_extracted_dir: "node_exporter-1.8.1.linux-amd64"
+    node_exporter_bin_path: "/usr/local/bin/node_exporter"
+    exporter_user_system: "prometheus"
+  run_once: true
+
+# ========================================================
+#  1. 本地准备 (下载并解压，只做一次)
+# ========================================================
+- name: (Local) Ensure files directory exists
+  file:
+    path: "{{ local_files_dir }}"
+    state: directory
+  delegate_to: localhost
+  run_once: true
+
+- name: (Local) Check if Node Exporter tarball exists locally
+  stat:
+    path: "{{ local_files_dir }}/{{ node_tar_filename }}"
+  register: local_node_tar_check
+  delegate_to: localhost
+  run_once: true
+
+- name: (Local) Download Node Exporter
+  get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/{{ node_tar_filename }}"
+    dest: "{{ local_files_dir }}/{{ node_tar_filename }}"
+  delegate_to: localhost
+  run_once: true
+  when: not local_node_tar_check.stat.exists
+
+- name: (Local) Unarchive Node Exporter locally
+  unarchive:
+    src: "{{ local_files_dir }}/{{ node_tar_filename }}"
+    dest: "{{ local_files_dir }}"
+    creates: "{{ local_files_dir }}/{{ node_extracted_dir }}/node_exporter"
+  delegate_to: localhost
+  run_once: true
+
+# ========================================================
+#  2. 远程部署 (所有节点)
+# ========================================================
+
+# [Optional] Check if installed (检测是否已安装)
+- name: Check if Node Exporter binary exists
+  stat:
+    path: "{{ node_exporter_bin_path }}"
+  register: ne_check
+
+- name: Report Node Exporter Status
+  debug:
+    msg: "Node Exporter is {{ 'Installed' if ne_check.stat.exists else 'NOT Installed' }}."
+
+# 1. 确保系统用户存在 (虽然 30号脚本可能建过了，但为了脚本独立性再检查一次)
+- name: Ensure system user 'prometheus' exists
+  user:
+    name: "{{ exporter_user_system }}"
+    shell: /sbin/nologin
+    state: present
+
+# 2. 分发二进制文件
+- name: Push Node Exporter Binary
+  copy:
+    src: "{{ local_files_dir }}/{{ node_extracted_dir }}/node_exporter"
+    dest: "{{ node_exporter_bin_path }}"
+    mode: '0755'
+    owner: "{{ exporter_user_system }}"
+    group: "{{ exporter_user_system }}"
+  register: node_bin_copy
+
+# 3. 配置 Systemd 服务
+- name: Create Node Exporter Service File
+  copy:
+    dest: "/etc/systemd/system/node_exporter.service"
+    content: |
+      [Unit]
+      Description=Prometheus Node Exporter
+      After=network.target
+
+      [Service]
+      User={{ exporter_user_system }}
+      Group={{ exporter_user_system }}
+      Type=simple
+      ExecStart={{ node_exporter_bin_path }}
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+  register: node_service_copy
+
+# 4. 重启逻辑 (仅当变更时)
+- name: Restart Node Exporter if changed
+  service:
+    name: node_exporter
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+  when: node_bin_copy.changed or node_service_copy.changed
+
+# 5. 兜底启动
+- name: Ensure Node Exporter is started
+  service:
+    name: node_exporter
+    state: started
+    enabled: yes
+
+# 6. 验证
+- name: Wait for Node Exporter port 9100
+  wait_for:
+    port: 9100
+    delay: 2
+    timeout: 10
+
+- name: Check Node Exporter Metrics (Look for node_cpu_seconds_total)
+  uri:
+    url: "http://localhost:9100/metrics"
+    return_content: yes
+  register: node_metrics
+  failed_when: "'node_cpu_seconds_total' not in node_metrics.content"
+
+- name: Show Node Exporter Success
+  debug:
+    msg: "Node Exporter installed! Metrics at http://{{ inventory_hostname }}:9100/metrics"

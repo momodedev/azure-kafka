@@ -1,0 +1,15 @@
+---
+- name: Create Replication User on Master
+  community.mysql.mysql_user:
+    name: "{{ repl_user }}"
+    password: "{{ repl_pass }}"
+    # 允许从任意 IP 连接
+    host: "%"
+    priv: "*.*:REPLICATION SLAVE"
+    state: present
+    login_user: root
+    login_password: "{{ root_pass }}"
+
+- name: Print Info
+  debug:
+    msg: "Master is ready. Slaves can join using GTID auto-position."

@@ -1,0 +1,11 @@
+---
+- name: Enable and Start MySQL Service
+  ansible.builtin.service:
+    name: mysqld
+    state: started     # 确保现在是运行状态
+    enabled: yes       # 确保开机自启
+  register: service_status
+
+- name: Check Status
+  debug:
+    msg: "MySQL is running and enabled!"

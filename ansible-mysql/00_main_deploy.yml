@@ -1,0 +1,125 @@
+---
+# ==========================================================
+# MySQL 5.7 GTID Cluster - One-Click Deployment
+# ==========================================================
+
+# ----------------------------------------------------------
+# Phase 0: Ensure Secrets Exist (Generate if missing)
+# ----------------------------------------------------------
+- name: Phase 0 - Prepare Secrets
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Check if secrets.yml exists
+      stat:
+        path: "secrets.yml"
+      register: secrets_file
+
+    - name: Generate random passwords (only if secrets.yml is missing)
+      when: not secrets_file.stat.exists
+      block:
+        - name: Generate random strings
+          set_fact:
+            rand_repl: "{{ lookup('password', '/dev/null length=15 chars=ascii_letters,digits') }}!"
+            rand_root: "{{ lookup('password', '/dev/null length=15 chars=ascii_letters,digits') }}!"
+            rand_exporter: "{{ lookup('password', '/dev/null length=15 chars=ascii_letters,digits') }}!"
+
+        - name: Write to secrets.yml
+          copy:
+            dest: secrets.yml
+            content: |
+              # secrets.yml (Auto-generated)
+              repl_user: "repl"
+              repl_pass: "{{ rand_repl }}"
+              root_pass: "{{ rand_root }}"
+              exporter_user: "mysqld_exporter"
+              exporter_pass: "{{ rand_exporter }}"
+          
+        - name: Display generated passwords
+          debug:
+            msg: "Generated new secrets.yml with random passwords."
+
+# ----------------------------------------------------------
+# 阶段一：所有节点的基础安装与配置
+# ----------------------------------------------------------
+- name: Phase 1 - Base Installation & Configuration
+  hosts: db_servers
+  become: yes
+  gather_facts: yes # 必须开启，GTID 配置需要 IP
+  vars_files:
+    - secrets.yml
+
+  tasks:
+    # 先挂载磁盘
+    - name: "[System] Auto Mount Data Disk to /data"
+      include_tasks: tasks/35_mount_data_disk.yml
+      # 如果你想挂载到 /data/mysql，可以在这里传变量
+      # vars:
+      #   mount_point: "/data"
+
+    - name: "[01] Install MySQL 5.7"
+      # 注意这里的路径 tasks/... 和文件名
+      include_tasks: tasks/01_task_install_mysql_57.yml
+
+    - name: "[Check] Ensure MySQL is Running"
+      include_tasks: tasks/ensure_mysql_running.yml
+
+    - name: "[02] Init Root Password"
+      include_tasks: tasks/02_init_root_password.yml
+
+    - name: "[21] Configure GTID"
+      include_tasks: tasks/21_config_gtid.yml
+
+# ----------------------------------------------------------
+# 阶段二：配置 Master (创建同步账号)
+# ----------------------------------------------------------
+- name: Phase 2 - Master Configuration
+  hosts: mysql_master
+  become: yes
+  vars_files:
+    - secrets.yml
+
+  tasks:
+    - name: "[22] Create Replication User"
+      include_tasks: tasks/22_init_master_user.yml
+
+# ----------------------------------------------------------
+# 阶段三：配置 Slaves (加入集群)
+# ----------------------------------------------------------
+- name: Phase 3 - Join Slaves to Cluster
+  hosts: mysql_slave
+  become: yes
+  vars_files:
+    - secrets.yml
+
+  tasks:
+    - name: "[23] Join Slaves using GTID"
+      include_tasks: tasks/23_join_slaves_gtid.yml
+
+# ----------------------------------------------------------
+# 阶段四：部署监控 Exporter
+# ----------------------------------------------------------
+- name: Phase 4 - Deploy Monitoring
+  hosts: db_servers
+  become: yes
+  vars_files:
+    - secrets.yml
+
+  tasks:
+    - name: "[30] Deploy MySQL Exporter"
+      include_tasks: tasks/30_deploy_mysql_exporter.yml
+
+    - name: "[36] Deploy Node Exporter"
+      include_tasks: tasks/36_deploy_node_exporter.yml
+
+# ----------------------------------------------------------
+# 阶段五：给 Ansible Control 自身监控 (Node Exporter)
+# ----------------------------------------------------------
+- name: Phase 5 - Install Node Exporter on Controller
+  hosts: localhost
+  connection: local
+  become: yes
+  tasks:
+    - name: "[Self] Deploy Node Exporter"
+      include_tasks: tasks/36_deploy_node_exporter.yml

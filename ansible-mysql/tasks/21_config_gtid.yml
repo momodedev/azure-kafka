@@ -1,0 +1,28 @@
+---
+- name: Configure GTID in my.cnf
+  blockinfile:
+    path: /etc/my.cnf
+    block: |
+      # 直接使用 IP 最后一位做 server_id
+      server-id={{ ansible_default_ipv4.address.split('.')[-1] }}
+      # 开启 GTID 的核心配置
+      gtid_mode=ON
+      enforce_gtid_consistency=ON
+      # 即使是 GTID，log-bin 也是必须的
+      log-bin=mysql-bin
+      binlog_format=ROW
+      # 防止从库更新回环（虽然是单向同步，加上更安全）
+      log_slave_updates=ON
+    marker: "# {mark} ANSIBLE GTID CONFIG"
+  register: config_changed
+
+- name: Restart MySQL to apply GTID
+  service:
+    name: mysqld
+    state: restarted
+  when: config_changed.changed
+
+- name: Wait for MySQL to be ready
+  wait_for:
+    port: 3306
+    delay: 10

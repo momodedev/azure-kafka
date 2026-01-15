@@ -1,6 +1,6 @@
 ###################### Multiple VMs #####################
 
-# Create network interfaces for each Kafka broker
+# Create network interfaces for each Kafka broker (NO public IPs)
 resource "azurerm_network_interface" "kafka_brokers" {
   count               = var.kafka_instance_count
   name                = "kafka-prod-nic-${count.index}"
@@ -11,6 +11,7 @@ resource "azurerm_network_interface" "kafka_brokers" {
     name                          = "kafka-prod-ip-config-${count.index}"
     subnet_id                     = azurerm_subnet.kafka.id
     private_ip_address_allocation = "Dynamic"
+    # REMOVED: public_ip_address_id - private cluster doesn't need public IPs
   }
 }
 
@@ -21,7 +22,7 @@ resource "azurerm_network_interface_security_group_association" "kafka_brokers" 
   network_security_group_id = azurerm_network_security_group.example.id
 }
 
-# Create individual Kafka broker VMs in Zone 2
+# Create individual Kafka broker VMs in Zone 2 (private cluster)
 resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   count               = var.kafka_instance_count
   name                = "kafka-prod-broker-${count.index}"
@@ -68,7 +69,7 @@ resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   }
 }
 
-# PremiumV2_LRS Data Disks - Using azurerm_managed_disk (proven pattern from tf-mysql)
+# PremiumV2_LRS Data Disks
 resource "azurerm_managed_disk" "kafka_data_disk" {
   count               = var.kafka_instance_count
   name                = "kafka-data-disk-${count.index}"
@@ -94,7 +95,7 @@ resource "azurerm_virtual_machine_data_disk_attachment" "kafka_data_disk" {
   caching            = "None"
 }
 
-# Output private IPs
+# Output private IPs only (no public IPs for private cluster)
 output "kafka_private_ips" {
   description = "Private IP addresses assigned to Kafka brokers."
   value       = azurerm_linux_virtual_machine.kafka_brokers[*].private_ip_address
