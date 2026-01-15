@@ -48,6 +48,7 @@ EOF
 
 index=1
 for ip in "${private_ips[@]}"; do
+    # IMPORTANT: Use just the IP, don't add port here - kafka_exporter role adds :9092
     printf 'kafka-broker-%02d ansible_host=%s ansible_user=%s\n' "$index" "$ip" "$admin_user" >> monitoring/generated_inventory.ini
     index=$((index + 1))
 done
