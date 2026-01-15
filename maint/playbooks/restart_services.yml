@@ -1,0 +1,5 @@
+# 示例内容: restart_services.yml
+- name: Restart Kafka Services
+  hosts: all
+  tasks:
+    - debug: msg='Restarting services'

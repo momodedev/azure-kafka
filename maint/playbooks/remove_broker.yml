@@ -1,0 +1,5 @@
+# 示例内容: remove_broker.yml
+- name: Remove Kafka Broker
+  hosts: localhost
+  tasks:
+    - debug: msg='Removing broker'

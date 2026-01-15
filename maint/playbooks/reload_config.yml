@@ -1,0 +1,5 @@
+# 示例内容: reload_config.yml
+- name: Reload Kafka Config
+  hosts: all
+  tasks:
+    - debug: msg='Reloading config'

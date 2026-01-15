@@ -1,0 +1,5 @@
+# 示例内容: stop_cluster.yml
+- name: Stop Kafka Cluster
+  hosts: all
+  tasks:
+    - debug: msg='Stopping cluster'
