@@ -104,7 +104,6 @@ output "kafka_private_ips" {
 # Launch Ansible playbook after all VMs are ready
 resource "null_resource" "launch_ansible_playbook" {
   triggers = {
-    # Trigger re-deployment when instance count or private IPs change
     kafka_count = var.kafka_instance_count
     private_ips = join(",", sort(azurerm_linux_virtual_machine.kafka_brokers[*].private_ip_address))
   }
@@ -112,25 +111,7 @@ resource "null_resource" "launch_ansible_playbook" {
   provisioner "local-exec" {
     working_dir = "/home/azureadmin/azure-kafka/install_kafka_with_ansible_roles"
     interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      set -euo pipefail
-      source /home/azureadmin/ansible-venv/bin/activate
-      az login --identity >/dev/null
-      
-      # Generate inventory
-      mkdir -p generated
-      bash ./inventory_script_hosts_vms.sh ${azurerm_resource_group.example.name} ${var.kafka_admin_username} > generated/kafka_hosts
-      
-      # Deploy Kafka
-      ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml
-      
-      # Update monitoring with all brokers (old and new)
-      ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml
-      
-      # Trigger target discovery on control node
-      ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa azureadmin@$(az vm list-ip-addresses -g control_rg -n control-node --query "[0].virtualMachine.publicIpAddresses[0]" -o tsv) \
-        "/usr/local/bin/update_kafka_targets.sh ${azurerm_resource_group.example.name} 9308 9100"
-    EOT
+    command     = "source /home/azureadmin/ansible-venv/bin/activate && az login --identity >/dev/null && mkdir -p generated && bash ./inventory_script_hosts_vms.sh ${azurerm_resource_group.example.name} ${var.kafka_admin_username} > generated/kafka_hosts && ansible-playbook -i generated/kafka_hosts deploy_kafka_playbook.yaml && ansible-playbook -i monitoring/generated_inventory.ini monitoring/deploy_monitoring_playbook.yml"
   }
 
   depends_on = [
