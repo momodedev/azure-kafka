@@ -50,14 +50,14 @@ resource "azurerm_linux_virtual_machine" "kafka_brokers" {
   source_image_reference {
     publisher = "resf"
     offer     = "rockylinux-x86_64"
-    sku       = "9-lvm"
-    version   = "latest"
+    sku       = "9-base"
+    version   = "9.6.20250531"
   }
 
   plan {
     publisher = "resf"
     product   = "rockylinux-x86_64"
-    name      = "9-lvm"
+    name      = "9-base"
   }
 
   identity {
