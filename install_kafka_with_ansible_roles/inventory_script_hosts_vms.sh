@@ -41,7 +41,7 @@ echo "ansible_python_interpreter=/usr/bin/python3"
 mkdir -p monitoring
 cat > monitoring/generated_inventory.ini <<'EOF'
 [management_node]
-mgmt-kafka-monitor ansible_connection=local ansible_user=azureadmin
+localhost ansible_connection=local ansible_user=azureadmin
 
 [kafka_broker]
 EOF
