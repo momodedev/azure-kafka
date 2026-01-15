@@ -35,8 +35,8 @@
 
 - name: Build Kafka brokers bootstrap server list
   ansible.builtin.set_fact:
-    # Extract just the IP part (before any colon), then append :9092
-    kafka_servers: "{{ groups['kafka_broker'] | map('extract', hostvars, 'ansible_host') | map('regex_replace', ':.*', '') | map('regex_replace', '(.*)', '\\1:9092') | join(',') }}"
+    # Strip any existing port, then add :9092
+    kafka_servers: "{{ groups['kafka_broker'] | map('extract', hostvars, 'ansible_host') | map('regex_replace', ':[0-9]+$', '') | map('regex_replace', '(.*)', '\\1:9092') | join(',') }}"
   tags: kafka_exporter
 
 - name: Deploy kafka exporter service unit
