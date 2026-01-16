@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# filepath: install_kafka_with_ansible_roles/inventory_script_hosts_vms.sh
+# filepath: Ansible/inventory_script_hosts_vms.sh
 
 set -euo pipefail
 

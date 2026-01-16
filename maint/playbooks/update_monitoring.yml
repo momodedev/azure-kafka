@@ -1,5 +1,0 @@
-# 示例内容: update_monitoring.yml
-- name: Update Monitoring
-  hosts: prometheus_server
-  tasks:
-    - debug: msg='Updating monitoring config'

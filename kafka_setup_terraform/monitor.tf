@@ -107,7 +107,7 @@ resource "null_resource" "deploy_monitoring" {
   }
 
   provisioner "local-exec" {
-    working_dir = "../install_kafka_with_ansible_roles"
+    working_dir = "../Ansible"
     command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i '${azurerm_linux_virtual_machine.monitor.public_ip_address},' -u ${var.monitor_admin_username} --ssh-extra-args='-o StrictHostKeyChecking=no' deploy_monitoring_playbook.yaml --extra-vars \"broker_ips=${join(",", data.azurerm_virtual_machine_scale_set.brokers.instances.*.private_ip_address)}\""
   }
 

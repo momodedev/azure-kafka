@@ -28,7 +28,7 @@ KAFKA_BROKER_ID=$(hostname | grep -oP '(?<=-)\d+$')
 echo "Kafka Broker ID: $KAFKA_BROKER_ID"
 
 # Run Kafka installation Ansible role locally
-cd install_kafka_with_ansible_roles
+cd Ansible
 ansible-playbook -i localhost, -c local deploy_kafka_playbook.yaml -e "kafka_node_id=${KAFKA_BROKER_ID}"
 
 echo "=== Kafka Bootstrap Complete ==="

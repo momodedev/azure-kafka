@@ -1,5 +1,0 @@
-# 示例内容: start_cluster.yml
-- name: Start Kafka Cluster
-  hosts: all
-  tasks:
-    - debug: msg='Starting cluster'

@@ -1,5 +1,0 @@
-# 示例内容: add_broker.yml
-- name: Add Kafka Broker
-  hosts: localhost
-  tasks:
-    - debug: msg='Adding broker'
